@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Teal angular UTCJ-inspired mark (placeholder logo) -->
+    <path
+        android:fillColor="#4DB6AC"
+        android:pathData="M28,72 L54,28 L80,72 L68,72 L54,48 L40,72 Z" />
+    <path
+        android:fillColor="#00695C"
+        android:pathData="M40,78 L54,54 L68,78 Z" />
+</vector>

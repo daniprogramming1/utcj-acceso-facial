@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Acceso UTCJ</string>
+    <string name="role_student">Soy alumno</string>
+    <string name="role_guard">Soy guardia de seguridad</string>
+    <string name="consent_title">Consentimiento de privacidad</string>
+    <string name="consent_accept">Aceptar</string>
+    <string name="delete_my_data">Eliminar mis datos</string>
+    <string name="kiosk_verify">Verificar acceso</string>
+    <string name="access_allowed">ACCESO PERMITIDO</string>
+    <string name="access_denied">ACCESO DENEGADO</string>
+    <string name="online">En línea</string>
+    <string name="offline">Sin conexión</string>
+    <string name="syncing">Sincronizando</string>
+    <string name="pending_sync">Pendientes: %1$d</string>
+    <string name="face_look_straight">Mira de frente a la cámara</string>
+    <string name="face_too_dark">Mejora la iluminación</string>
+    <string name="face_too_blurry">Mantén el dispositivo estable</string>
+    <string name="face_too_far">Acércate un poco</string>
+    <string name="face_too_close">Aléjate un poco</string>
+    <string name="face_no_face">No se detectó un rostro</string>
+    <string name="face_multiple">Solo una persona a la vez</string>
+    <string name="face_blink">Parpadea para confirmar presencia</string>
+    <string name="face_turn_left">Gira ligeramente la cabeza a la izquierda</string>
+    <string name="face_turn_right">Gira ligeramente la cabeza a la derecha</string>
+</resources>

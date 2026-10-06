@@ -1,0 +1,39 @@
+# Gradle
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Local config
+local.properties
+*.keystore
+*.jks
+keystore.properties
+
+# Firebase (secreto por proyecto)
+google-services.json
+
+# Android Studio / IntelliJ (se conservan configuraciones útiles compartibles)
+*.iml
+.idea/*
+!.idea/codeStyles/
+!.idea/runConfigurations/
+!.idea/dictionaries/
+captures/
+.externalNativeBuild/
+.cxx/
+.navigation/
+
+# Artefactos
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+output.json
+release/
+
+# Logs / SO
+*.log
+.DS_Store
+Thumbs.db

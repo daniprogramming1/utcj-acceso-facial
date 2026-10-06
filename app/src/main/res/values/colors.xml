@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="utcj_blue">#FF1565C0</color>
+    <color name="utcj_teal">#FF00695C</color>
+    <color name="utcj_teal_light">#FF4DB6AC</color>
+    <color name="ic_launcher_background">#FF00695C</color>
+</resources>
