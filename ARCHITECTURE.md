@@ -28,7 +28,9 @@ CameraX (ImageAnalysis, cámara frontal, KEEP_ONLY_LATEST)
   → ML Kit FaceDetection (landmarks + clasificación ojos)
   → FaceQualityChecker  (1 rostro, tamaño, pose ±20°, brillo, nitidez) → guía en español
   → LivenessChecker     (opcional: parpadeo o giro de cabeza)
-  → FaceEmbeddingEngine (alinear por ojos, recortar +25 %, 128×128, vector 268-d L2)
+  → FaceEmbeddingEngine (alinear por ojos, recortar +25 %)
+       · MobileFaceNet TFLite: 112×112 RGB → ~192-d L2  (preferido)
+       · Legado histograma: 128×128 → 268-d L2          (si no hay modelo)
   → FaceMatcher         (coseno vs TODAS las muestras de alumnos aprobados; mejor coincidencia)
   → Reglas: estatus (APPROVED/ACTIVO), BAJA/SUSPENDIDO/PENDING ⇒ denegar, horario permitido
   → AccessLogRepository.log()  → Room + SyncQueue + SyncWorker
@@ -37,21 +39,27 @@ CameraX (ImageAnalysis, cámara frontal, KEEP_ONLY_LATEST)
 
 Respaldos: **QR dinámico** (`QrTokenManager`: `base64url(matricula|expira|nonce).base64url(HMAC-SHA256)`, vigencia 30 s, comparación en tiempo constante) y **huella** (`BiometricPrompt`, `BIOMETRIC_WEAK`).
 
-## Motor de embeddings (punto de extensión)
+## Motor de embeddings
 
-`data/biometric/FaceEmbeddingEngine.kt` documenta el enfoque escolar:
+Contrato: `data/biometric/FaceEmbeddingEngine` (interfaz). Selección en `di/BiometricModule`:
 
-1. Histograma 16×16 en escala de grises del rostro alineado (256 dims, normalizado).
-2. 12 rasgos geométricos relativos a la caja del rostro (distancia entre ojos, ancho de boca, posición de nariz/ojos, ángulos Euler, escala).
-3. Concatenación y normalización L2 → 268 dims.
+| Motor | Clase | Entrada | Dim | Cuándo |
+|---|---|---|---|---|
+| **MobileFaceNet** | `MobileFaceNetEmbeddingEngine` | 112×112 RGB, `(p−127.5)/128` | ~192 | `assets/models/mobilefacenet.tflite` presente y legado desactivado |
+| **Legado** | `LegacyHistogramEmbeddingEngine` | histograma 16×16 + 12 rasgos geométricos | 268 | sin modelo, error de carga, o flag `use_legacy_face_embedding` |
 
-**Para usar un modelo real** (MobileFaceNet/FaceNet en TFLite u ONNX): reemplaza el cuerpo de `extractEmbedding(source, face)` usando `alignAndCrop()` como entrada del modelo y devuelve el vector normalizado. Ni `FaceMatcher`, ni el cifrado, ni Room cambian (la columna guarda bytes de longitud variable). Tras el cambio **vuelve a registrar** a los alumnos y recalibra el umbral (típico 0.5–0.7 para MobileFaceNet).
+Alineación compartida: `FaceAlignment.alignAndCrop()` (ojos ML Kit, margen 25 %).
+
+**Obtener el modelo**: `./scripts/download_mobilefacenet.sh` → `app/src/main/assets/models/mobilefacenet.tflite` (ver `assets/models/README.md`). El binario no se versiona (`.gitignore` `*.tflite`).
+
+**Migración**: embeddings de distintos motores **no son compatibles**. `FaceMatcher` omite muestras con dimensión distinta a la sonda. Tras cambiar de modelo **vuelve a registrar** a los alumnos. Ni el cifrado (`EmbeddingCrypto`) ni Room cambian (bytes de longitud variable).
 
 ## Dónde configurar
 
 | Parámetro | Dónde | Predeterminado |
 |---|---|---|
-| **Umbral facial** (coseno) | `FaceMatcher.DEFAULT_THRESHOLD`; en tiempo de ejecución `SettingsRepository.getFaceThreshold()/setFaceThreshold()` (clave `face_match_threshold`), editable en **Panel → Configuración** (rango 0.50–0.95) | **0.72** |
+| **Umbral facial** (coseno) | `FaceMatcher.DEFAULT_THRESHOLD` (MobileFaceNet); `LEGACY_THRESHOLD` = 0.72; runtime `SettingsRepository.getFaceThreshold()` (`face_match_threshold`), **Panel → Configuración** (0.50–0.95) | **0.60** |
+| Motor facial legado | `SettingsRepository.useLegacyFaceEmbedding()` (`use_legacy_face_embedding`), switch en Configuración; requiere reiniciar la app | Desactivado |
 | Liveness | `SettingsRepository.isLivenessEnabled()` / Configuración | Desactivado |
 | **Horario permitido** | `SettingsRepository.getHoursStart()/getHoursEnd()` (`DEFAULT_HOURS_START`/`END`), editable en Configuración; zona `America/Ciudad_Juarez` (`TimeUtil`) | 6:00–22:00 |
 | Muestras de registro | `SettingsRepository.getMinSamples()/getMaxSamples()` | 3 / 5 |

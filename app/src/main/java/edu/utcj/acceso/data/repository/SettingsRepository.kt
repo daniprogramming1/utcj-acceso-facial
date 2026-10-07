@@ -12,7 +12,10 @@ import javax.inject.Singleton
  * App settings persisted in EncryptedSharedPreferences.
  *
  * ## Face threshold
- * Key: [KEY_FACE_THRESHOLD], default [FaceMatcher.DEFAULT_THRESHOLD] = **0.72**
+ * Key: [KEY_FACE_THRESHOLD], default [FaceMatcher.DEFAULT_THRESHOLD] = **0.60** (MobileFaceNet)
+ *
+ * ## Motor facial
+ * [KEY_USE_LEGACY_EMBEDDING]: si true, fuerza el histograma legado aunque exista el TFLite.
  *
  * ## Access hours
  * [KEY_HOURS_START] / [KEY_HOURS_END] — 24h local (America/Ciudad_Juarez)
@@ -23,6 +26,7 @@ class SettingsRepository @Inject constructor(
 ) {
     companion object {
         const val KEY_FACE_THRESHOLD = "face_match_threshold"
+        const val KEY_USE_LEGACY_EMBEDDING = "use_legacy_face_embedding"
         const val KEY_LIVENESS = "liveness_enabled"
         const val KEY_HOURS_START = "access_hours_start"
         const val KEY_HOURS_END = "access_hours_end"
@@ -62,6 +66,13 @@ class SettingsRepository @Inject constructor(
 
     fun getMinSamples(): Int = securePrefs.getInt(KEY_MIN_SAMPLES, 3)
     fun getMaxSamples(): Int = securePrefs.getInt(KEY_MAX_SAMPLES, 5)
+
+    /** Fuerza el motor de histograma legado (268-d) en lugar de MobileFaceNet. */
+    fun useLegacyFaceEmbedding(): Boolean =
+        securePrefs.getBoolean(KEY_USE_LEGACY_EMBEDDING, false)
+
+    fun setUseLegacyFaceEmbedding(enabled: Boolean) =
+        securePrefs.putBoolean(KEY_USE_LEGACY_EMBEDDING, enabled)
 
     fun getOrCreateQrSecret(): String {
         val existing = securePrefs.getString(KEY_QR_SECRET)

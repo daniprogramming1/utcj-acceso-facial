@@ -2,7 +2,7 @@
 
 App Android nativa para verificar el acceso de alumnos a la **Universidad Tecnológica de Ciudad Juárez (UTCJ)** mediante reconocimiento facial en el dispositivo, con respaldos por huella y QR dinámico, bitácora auditable y panel de guardia.
 
-> Proyecto escolar. El motor de *embeddings* faciales es una implementación pragmática (ver **Limitaciones**), diseñada para reemplazarse por un modelo FaceNet/MobileFaceNet.
+> Proyecto escolar. Motor facial preferido: **MobileFaceNet (TFLite)**; si el modelo no está en assets, se usa un histograma legado (ver **Limitaciones** y `scripts/download_mobilefacenet.sh`).
 
 ## Características
 
@@ -11,7 +11,7 @@ App Android nativa para verificar el acceso de alumnos a la **Universidad Tecnol
 | Roles | «Soy alumno» / «Soy guardia de seguridad» |
 | Guardia | Contraseña PBKDF2-HMAC-SHA256 (sal aleatoria, 120 000 iteraciones) en EncryptedSharedPreferences; bloqueo de 5 min tras 5 intentos fallidos; salir del kiosco exige contraseña |
 | Registro de alumno | Consentimiento de privacidad versionado con fecha/hora; 3–5 muestras faciales (CameraX + ML Kit); **solo embeddings cifrados AES-256-GCM (Android Keystore)**, nunca fotos; estado PENDIENTE hasta aprobación |
-| Reconocimiento | Alineación por ojos, recorte con margen, controles de calidad con guía en español, similitud coseno contra todas las muestras, umbral configurable (**0.72** por defecto), liveness opcional (parpadeo / giro) |
+| Reconocimiento | Alineación por ojos, recorte con margen, **MobileFaceNet TFLite** (112×112 → ~192-d) o histograma legado, similitud coseno, umbral configurable (**0.60** por defecto; ~0.72 con legado), liveness opcional (parpadeo / giro) |
 | Respaldo | BiometricPrompt (huella) o QR dinámico firmado con HMAC-SHA256 (vigencia 30 s) leído con ML Kit Barcode |
 | Kiosco | Pantalla completa inmersiva, orientación fija, pantalla siempre encendida, resultado verde/rojo con nombre y matrícula, reinicio automático a los 30 s |
 | Bitácora | Room (solo lectura en la app), filtros, exportación CSV y PDF (`PdfDocument`), cola WorkManager sin duplicados hacia Firestore (opcional) |
@@ -33,10 +33,15 @@ App Android nativa para verificar el acceso de alumnos a la **Universidad Tecnol
 git clone https://github.com/daniprogramming1/utcj-acceso-facial.git
 cd utcj-acceso-facial
 cp local.properties.example local.properties   # ajusta sdk.dir (Android Studio lo crea solo)
+./scripts/download_mobilefacenet.sh            # opcional pero recomendado: modelo TFLite
 ./gradlew assembleDebug                        # APK en app/build/outputs/apk/debug/
 ./gradlew installDebug                         # instala en el dispositivo conectado
 ./gradlew testDebugUnitTest                    # pruebas unitarias
 ```
+
+### Modelo MobileFaceNet
+
+El binario `.tflite` **no** se incluye en el repositorio. Ejecuta `./scripts/download_mobilefacenet.sh` para colocarlo en `app/src/main/assets/models/mobilefacenet.tflite`. Sin él, la app usa el motor legado y lo indica en Logcat. Tras cambiar de modelo, **los alumnos deben volver a registrarse**.
 
 O ábrelo en Android Studio → *Open* → selecciona la carpeta → *Run ▶*.
 
@@ -68,7 +73,8 @@ app/src/main/java/edu/utcj/acceso/
   data/local     Room: entidades, DAOs, AppDatabase, Converters
   data/remote    FirestoreDataSource, StudentStatusCsvDataSource
   data/repository Student, AccessLog, Auth, Sync, Settings, Visitor, Incident
-  data/biometric FaceEmbeddingEngine, FaceQualityChecker, FaceMatcher, LivenessChecker, EmbeddingCrypto, QrTokenManager
+  data/biometric FaceEmbeddingEngine (interfaz), MobileFaceNetEmbeddingEngine, LegacyHistogramEmbeddingEngine,
+                 FaceAlignment, FaceQualityChecker, FaceMatcher, LivenessChecker, EmbeddingCrypto, QrTokenManager
   data/security  PasswordHasher, GuardAuthManager, SecurePrefs, KeyValueStore
   data/sync      SyncWorker, SyncQueue
   domain/model   Student, AccessEvent, Visitor, Incident, ConsentRecord, GuardSession
@@ -80,7 +86,7 @@ Más detalles en [ARCHITECTURE.md](ARCHITECTURE.md). Guía de pruebas en [TESTIN
 
 ## Limitaciones conocidas
 
-- **Embedding facial escolar**: histograma de intensidad en escala de grises (16×16) del rostro alineado + 12 rasgos geométricos de landmarks de ML Kit = vector de 268 dimensiones normalizado L2. Sirve para demostraciones; **no** tiene la robustez de una red neuronal entrenada (sensible a iluminación, lentes, cubrebocas). Para producción sustituye `FaceEmbeddingEngine.extractEmbedding()` por inferencia TFLite/ONNX (MobileFaceNet) y recalibra el umbral.
+- **Embeddings faciales**: con `mobilefacenet.tflite` en assets se usa MobileFaceNet (TFLite, ~192-d). Sin el archivo (o con «motor legado» en Configuración) se usa histograma 16×16 + geometría ML Kit (268-d). Ambos se L2-normalizan y se comparan por coseno; **no mezcles** vectores de distintos motores — hay que **volver a registrar** a los alumnos tras el cambio. Umbral por defecto **0.60** (MobileFaceNet); legado ~**0.72**.
 - **Huella**: BiometricPrompt valida una huella enrolada **en el dispositivo**, no identifica a un alumno concreto; se registra como respaldo con el guardia en turno.
 - **QR dinámico**: el secreto HMAC es local al dispositivo; el QR se valida en el mismo kiosco o en dispositivos que compartan el secreto.
 - La app no reemplaza un control de acceso físico certificado.

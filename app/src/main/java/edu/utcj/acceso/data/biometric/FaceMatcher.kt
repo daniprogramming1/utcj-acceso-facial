@@ -5,8 +5,12 @@ import javax.inject.Singleton
 import kotlin.math.sqrt
 
 /**
- * Cosine-similarity matcher against stored embeddings.
- * Default threshold: **0.72** (configured via [edu.utcj.acceso.data.repository.SettingsRepository]).
+ * Coincidencia por similitud coseno contra embeddings almacenados.
+ *
+ * Umbral por defecto: **0.60** (calibrado para MobileFaceNet 192-d L2).
+ * Con el motor legado (histograma 268-d) conviene subir a ~0.72
+ * ([LegacyHistogramEmbeddingEngine.RECOMMENDED_THRESHOLD]).
+ * Configurable en tiempo de ejecución vía [edu.utcj.acceso.data.repository.SettingsRepository].
  */
 @Singleton
 class FaceMatcher @Inject constructor() {
@@ -19,9 +23,9 @@ class FaceMatcher @Inject constructor() {
     )
 
     /**
-     * @param probe L2-normalized probe embedding
-     * @param gallery map of matricula → list of L2-normalized sample embeddings
-     * @param threshold cosine similarity threshold (default 0.72)
+     * @param probe embedding L2-normalizado de consulta
+     * @param gallery mapa matrícula → lista de embeddings L2-normalizados
+     * @param threshold umbral de similitud coseno (por defecto [DEFAULT_THRESHOLD])
      */
     fun bestMatch(
         probe: FloatArray,
@@ -33,6 +37,11 @@ class FaceMatcher @Inject constructor() {
         var bestIdx = -1
         for ((mat, samples) in gallery) {
             samples.forEachIndexed { idx, sample ->
+                if (sample.size != probe.size) {
+                    // Dimensiones incompatibles (p. ej. legado 268 vs MobileFaceNet 192):
+                    // se omiten; el alumno debe volver a registrarse tras cambio de modelo.
+                    continue
+                }
                 val sim = cosineSimilarity(probe, sample)
                 if (sim > bestSim) {
                     bestSim = sim
@@ -65,7 +74,13 @@ class FaceMatcher @Inject constructor() {
     }
 
     companion object {
-        /** Default cosine similarity threshold for school-project embeddings. */
-        const val DEFAULT_THRESHOLD = 0.72f
+        /**
+         * Umbral coseno por defecto para MobileFaceNet (embeddings L2 ~192-d).
+         * Antes (histograma escolar): 0.72 — ver [LEGACY_THRESHOLD].
+         */
+        const val DEFAULT_THRESHOLD = 0.60f
+
+        /** Umbral sugerido si se fuerza el motor legado (histograma). */
+        const val LEGACY_THRESHOLD = 0.72f
     }
 }

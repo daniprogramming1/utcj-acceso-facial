@@ -8,7 +8,7 @@
 
 | Archivo | Cubre |
 |---|---|
-| `biometric/FaceMatcherTest.kt` | Umbral predeterminado 0.72, vectores idénticos coinciden, ortogonales no, se elige la mejor muestra |
+| `biometric/FaceMatcherTest.kt` | Umbral predeterminado 0.60 (MobileFaceNet) / legado 0.72; vectores idénticos 192-d y 268-d; dimensiones mixtas se omiten |
 | `security/PasswordHasherTest.kt` | Hash/verificación PBKDF2, contraseña incorrecta, sales distintas ⇒ hashes distintos, ida y vuelta hex |
 | `security/GuardAuthManagerLockoutTest.kt` | `GuardAuthManager` real con almacén en memoria y reloj falso: bloqueo tras 5 fallos, rechazo durante 5 min incluso con contraseña correcta, desbloqueo, reinicio del contador, cambio de contraseña |
 | `sync/SyncQueueDedupTest.kt` | `SyncQueue` real con DAO falso: clave duplicada no se encola dos veces, reintentos sin duplicar, reencolar tras eliminar |
@@ -117,4 +117,4 @@ Métricas:
 - **FAR** = aceptaciones de impostores / intentos de impostores
 - **Tiempo medio de verificación** (Tablero o columna `duracion_ms` del CSV)
 
-Para calibrar el umbral: exporta el CSV, grafica la columna `similitud` de intentos legítimos e impostores y elige el valor que separe ambas distribuciones (con el motor escolar, 0.72 es un punto de partida).
+Para calibrar el umbral: exporta el CSV, grafica la columna `similitud` de intentos legítimos e impostores y elige el valor que separe ambas distribuciones. Punto de partida: **0.60** (MobileFaceNet TFLite) o **0.72** (motor legado histograma).

@@ -1,7 +1,6 @@
 package edu.utcj.acceso.data.repository
 
 import edu.utcj.acceso.data.biometric.EmbeddingCrypto
-import edu.utcj.acceso.data.biometric.FaceEmbeddingEngine
 import edu.utcj.acceso.data.local.FaceEmbeddingDao
 import edu.utcj.acceso.data.local.FaceEmbeddingEntity
 import edu.utcj.acceso.data.local.StudentDao

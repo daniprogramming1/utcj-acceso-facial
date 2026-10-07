@@ -45,6 +45,11 @@ android {
     composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
 
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+
+    // TFLite models must stay uncompressed for memory-mapping via AssetFileDescriptor
+    androidResources {
+        noCompress += "tflite"
+    }
 }
 
 dependencies {
@@ -84,6 +89,7 @@ dependencies {
 
     implementation(libs.mlkit.face)
     implementation(libs.mlkit.barcode)
+    implementation(libs.tensorflow.lite) // MobileFaceNet embeddings
     implementation(libs.zxing.core) // solo para GENERAR el QR dinámico
 
     implementation(libs.androidx.biometric)

@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) {
     var threshold by remember { mutableFloatStateOf(vm.threshold()) }
     var liveness by remember { mutableStateOf(vm.liveness()) }
+    var legacyFace by remember { mutableStateOf(vm.legacyFace()) }
     var startH by remember { mutableIntStateOf(vm.hoursStart()) }
     var endH by remember { mutableIntStateOf(vm.hoursEnd()) }
     var msg by remember { mutableStateOf<String?>(null) }
@@ -47,7 +48,7 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) 
     Column(Modifier.fillMaxSize()) {
         AccesoHeader(title = "Configuración", onBack = onBack)
         Column(Modifier.padding(16.dp)) {
-            Text("Umbral facial (coseno). Predeterminado: 0.72")
+            Text("Umbral facial (coseno). Predeterminado: 0.60 (MobileFaceNet); legado ≈ 0.72")
             OutlinedTextField(
                 value = threshold.toString(),
                 onValueChange = { it.toFloatOrNull()?.let { v -> threshold = v } },
@@ -58,12 +59,15 @@ fun SettingsScreen(onBack: () -> Unit, vm: SettingsViewModel = hiltViewModel()) 
             Text("Liveness (parpadeo / giro)")
             Switch(checked = liveness, onCheckedChange = { liveness = it })
             Spacer(Modifier.height(8.dp))
+            Text("Motor facial legado (histograma; reinicia la app al cambiar)")
+            Switch(checked = legacyFace, onCheckedChange = { legacyFace = it })
+            Spacer(Modifier.height(8.dp))
             OutlinedTextField(startH.toString(), { it.toIntOrNull()?.let { v -> startH = v } }, label = { Text("Hora inicio (0-23)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(endH.toString(), { it.toIntOrNull()?.let { v -> endH = v } }, label = { Text("Hora fin (0-23)") }, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
             PrimaryBigButton("Guardar", onClick = {
-                vm.save(threshold, liveness, startH, endH)
-                msg = "Guardado"
+                vm.save(threshold, liveness, legacyFace, startH, endH)
+                msg = "Guardado (si cambiaste el motor facial, reinicia la app)"
             })
             Spacer(Modifier.height(8.dp))
             PrimaryBigButton("Importar estatus CSV", onClick = { picker.launch(arrayOf("text/*", "text/csv")) })
@@ -84,11 +88,13 @@ class SettingsViewModel @javax.inject.Inject constructor(
 ) : androidx.lifecycle.ViewModel() {
     fun threshold() = settings.getFaceThreshold()
     fun liveness() = settings.isLivenessEnabled()
+    fun legacyFace() = settings.useLegacyFaceEmbedding()
     fun hoursStart() = settings.getHoursStart()
     fun hoursEnd() = settings.getHoursEnd()
-    fun save(t: Float, live: Boolean, s: Int, e: Int) {
+    fun save(t: Float, live: Boolean, legacy: Boolean, s: Int, e: Int) {
         settings.setFaceThreshold(t)
         settings.setLivenessEnabled(live)
+        settings.setUseLegacyFaceEmbedding(legacy)
         settings.setHours(s, e)
     }
     suspend fun importCsv(input: java.io.InputStream) = students.importStatusFromStream(input)
