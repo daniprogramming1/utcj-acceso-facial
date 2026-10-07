@@ -36,7 +36,7 @@ class FaceMatcher @Inject constructor() {
         var bestSim = -1f
         var bestIdx = -1
         for ((mat, samples) in gallery) {
-            samples.forEachIndexed { idx, sample ->
+            for ((idx, sample) in samples.withIndex()) {
                 if (sample.size != probe.size) {
                     // Dimensiones incompatibles (p. ej. legado 268 vs MobileFaceNet 192):
                     // se omiten; el alumno debe volver a registrarse tras cambio de modelo.
