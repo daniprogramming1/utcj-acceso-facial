@@ -21,13 +21,21 @@ import edu.utcj.acceso.data.biometric.QrTokenManager
 import edu.utcj.acceso.data.biometric.QrVerifyResult
 import edu.utcj.acceso.data.repository.AccessLogRepository
 import edu.utcj.acceso.data.repository.AuthRepository
+import edu.utcj.acceso.data.repository.IncidentRepository
 import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.data.repository.StudentRepository
+import edu.utcj.acceso.data.repository.SyncRepository
+import edu.utcj.acceso.data.repository.SyncUiState
 import edu.utcj.acceso.domain.model.AccessMethod
 import edu.utcj.acceso.domain.model.AccessResult
+import edu.utcj.acceso.domain.model.IncidentCategory
 import edu.utcj.acceso.domain.model.StudentStatus
+import edu.utcj.acceso.ui.components.FaceGuideStatus
 import edu.utcj.acceso.util.TimeUtil
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -45,17 +53,46 @@ class KioskViewModel @Inject constructor(
     private val matcher: FaceMatcher,
     private val quality: FaceQualityChecker,
     private val liveness: LivenessChecker,
-    private val qr: QrTokenManager
+    private val qr: QrTokenManager,
+    private val incidents: IncidentRepository,
+    syncRepository: SyncRepository
 ) : ViewModel() {
 
-    data class VerifyOutcome(val allowed: Boolean, val nombre: String, val matricula: String)
+    /** Estado de conexión para la píldora del kiosco. */
+    val sync: StateFlow<SyncUiState?> = syncRepository.observeStatus()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+
+    data class VerifyOutcome(
+        val allowed: Boolean,
+        val nombre: String,
+        val matricula: String,
+        val reason: String? = null,
+        val method: AccessMethod = AccessMethod.FACE,
+        val timeMs: Long = System.currentTimeMillis()
+    )
     data class Ui(
-        val guidance: String = "Colócate frente a la cámara",
+        val guidance: String = IDLE_GUIDANCE,
         val busy: Boolean = false,
         val modeQr: Boolean = false,
         val result: VerifyOutcome? = null,
+        val faceStatus: FaceGuideStatus = FaceGuideStatus.Searching,
+        val assistanceRequested: Boolean = false,
         val livenessState: LivenessChecker.LivenessState = LivenessChecker.LivenessState()
-    )
+    ) {
+        /** Nadie frente a la cámara: se muestra el estado de espera «Acércate a la cámara». */
+        val idle: Boolean get() = !modeQr && result == null &&
+            (guidance == IDLE_GUIDANCE || guidance.startsWith("No se detect"))
+    }
+
+    companion object {
+        const val IDLE_GUIDANCE = "Acércate a la cámara"
+    }
+
+    /** Ajustes del kiosco leídos al abrirlo. */
+    val idleMs: Long = settings.getKioskIdleMs()
+    val soundEnabled: Boolean = settings.isKioskSoundEnabled()
+    val orientation: SettingsRepository.KioskOrientation = settings.getKioskOrientation()
 
     private val _ui = MutableStateFlow(Ui())
     val ui = _ui.asStateFlow()
@@ -86,16 +123,42 @@ class KioskViewModel @Inject constructor(
     }
 
     fun setModeQr() {
-        _ui.value = _ui.value.copy(modeQr = true, guidance = "Muestra el código QR dinámico")
+        _ui.value = _ui.value.copy(modeQr = true, result = null, busy = false, guidance = "Muestra tu QR dinámico a la cámara")
+    }
+
+    fun setModeFace() {
+        _ui.value = _ui.value.copy(modeQr = false, guidance = IDLE_GUIDANCE, faceStatus = FaceGuideStatus.Searching)
     }
 
     fun clearResult() {
-        _ui.value = _ui.value.copy(result = null, busy = false, modeQr = false)
+        lastVerifyMs = System.currentTimeMillis()
+        _ui.value = _ui.value.copy(
+            result = null, busy = false, modeQr = false, assistanceRequested = false,
+            guidance = IDLE_GUIDANCE, faceStatus = FaceGuideStatus.Searching
+        )
+    }
+
+    /**
+     * «Llamar al guardia» desde el resultado denegado: deja constancia como incidencia
+     * para que aparezca en el panel (Incidencias) del personal de seguridad.
+     */
+    fun requestAssistance() {
+        val r = _ui.value.result
+        viewModelScope.launch {
+            incidents.report(
+                category = IncidentCategory.ACCESO_NO_AUTORIZADO,
+                description = "Solicitud de asistencia desde el kiosco" +
+                    (r?.let { " · ${it.nombre} (${it.matricula}) · ${it.reason ?: "Acceso denegado"}" } ?: ""),
+                guard = "Kiosco",
+                matricula = r?.matricula?.takeIf { it != "—" && it != "BIOMETRIC" }
+            )
+        }
+        _ui.value = _ui.value.copy(assistanceRequested = true)
     }
 
     suspend fun onFrame(bitmap: Bitmap) {
         val now = System.currentTimeMillis()
-        if (now - lastVerifyMs < 700 || _ui.value.busy) return
+        if (now - lastVerifyMs < 700 || _ui.value.busy || _ui.value.result != null) return
         if (_ui.value.modeQr) {
             processQr(bitmap)
             return
@@ -106,9 +169,14 @@ class KioskViewModel @Inject constructor(
             val faces = faceDetector.process(InputImage.fromBitmap(bitmap, 0)).await()
             val q = quality.evaluate(bitmap, faces)
             if (!q.ok) {
-                _ui.value = _ui.value.copy(guidance = q.guidanceEs, busy = false)
+                _ui.value = _ui.value.copy(
+                    guidance = if (faces.isEmpty()) IDLE_GUIDANCE else q.guidanceEs,
+                    busy = false,
+                    faceStatus = if (faces.isEmpty()) FaceGuideStatus.Searching else FaceGuideStatus.Adjust
+                )
                 return
             }
+            _ui.value = _ui.value.copy(faceStatus = FaceGuideStatus.Good, guidance = "Verificando…")
             val face = faces.first()
             if (settings.isLivenessEnabled() && !_ui.value.livenessState.completed) {
                 val ls = liveness.update(_ui.value.livenessState, face)
@@ -121,7 +189,7 @@ class KioskViewModel @Inject constructor(
             lastVerifyMs = System.currentTimeMillis()
             finishFace(match, System.currentTimeMillis() - started)
         } catch (e: Exception) {
-            _ui.value = _ui.value.copy(guidance = "Error: ${e.message}", busy = false)
+            _ui.value = _ui.value.copy(guidance = "Error: ${e.message}", busy = false, faceStatus = FaceGuideStatus.Error)
         }
     }
 
@@ -129,8 +197,9 @@ class KioskViewModel @Inject constructor(
         if (!match.matched || match.matricula == null) {
             accessLog.log("—", "Desconocido", AccessResult.DENIED, AccessMethod.FACE, similarity = match.bestSimilarity, durationMs = duration)
             _ui.value = _ui.value.copy(
-                result = VerifyOutcome(false, "No reconocido", "—"),
+                result = VerifyOutcome(false, "No reconocido", "—", reason = "Rostro no registrado o no coincide"),
                 busy = false,
+                faceStatus = FaceGuideStatus.Error,
                 guidance = "No se encontró coincidencia"
             )
             return
@@ -154,6 +223,7 @@ class KioskViewModel @Inject constructor(
             student.status == StudentStatus.BAJA -> "Estatus BAJA"
             student.status == StudentStatus.SUSPENDIDO -> "Estatus SUSPENDIDO"
             student.status == StudentStatus.PENDING -> "Pendiente de aprobación"
+            student.status == StudentStatus.REJECTED -> "Registro rechazado"
             !withinHours -> "Fuera de horario"
             else -> null
         }
@@ -162,8 +232,9 @@ class KioskViewModel @Inject constructor(
             similarity = match.bestSimilarity, durationMs = duration, reason = reason
         )
         _ui.value = _ui.value.copy(
-            result = VerifyOutcome(allowed, nombre, match.matricula),
-            busy = false
+            result = VerifyOutcome(allowed, nombre, match.matricula, reason = reason, method = AccessMethod.FACE),
+            busy = false,
+            faceStatus = if (allowed) FaceGuideStatus.Done else FaceGuideStatus.Error
         )
     }
 
@@ -188,8 +259,13 @@ class KioskViewModel @Inject constructor(
                         AccessMethod.QR
                     )
                     lastVerifyMs = System.currentTimeMillis()
+                    val qrReason = when {
+                        student == null -> "Matrícula sin registro"
+                        allowed -> null
+                        else -> "Estatus ${student.status.name}"
+                    }
                     _ui.value = _ui.value.copy(
-                        result = VerifyOutcome(allowed, nombre, v.matricula),
+                        result = VerifyOutcome(allowed, nombre, v.matricula, reason = qrReason, method = AccessMethod.QR),
                         busy = false,
                         modeQr = false
                     )
@@ -249,7 +325,7 @@ class KioskViewModel @Inject constructor(
                 reason = "Fallback biométrico del dispositivo"
             )
             _ui.value = _ui.value.copy(
-                result = VerifyOutcome(true, "Huella verificada", "BIOMETRIC")
+                result = VerifyOutcome(true, "Huella verificada", "BIOMETRIC", method = AccessMethod.FINGERPRINT)
             )
         } else {
             _ui.value = _ui.value.copy(guidance = "Huella no verificada")
