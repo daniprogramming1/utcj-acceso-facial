@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Marca angular inspirada en el logotipo UTCJ (provisional). Reemplazar por el logo oficial
+     conservando el nombre del archivo. Ver «Guía de rebranding» en README.md. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#00796B"
+        android:pathData="M5,41 L21,7 L28,7 L13,41 Z" />
+    <path
+        android:fillColor="#14B8A6"
+        android:pathData="M28,7 L44,41 L36,41 L24.5,15 Z" />
+    <path
+        android:fillColor="#1D4ED8"
+        android:pathData="M18,41 L24.5,28 L31,41 Z" />
+</vector>

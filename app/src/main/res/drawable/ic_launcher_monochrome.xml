@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Capa monocromática para íconos temáticos (Android 13+). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Marca dentro de la zona segura (66 dp centrales) -->
     <group
         android:scaleX="1.2"
         android:scaleY="1.2"
@@ -12,12 +12,6 @@
         android:translateY="25.2">
         <path
             android:fillColor="#FFFFFFFF"
-            android:pathData="M5,41 L21,7 L28,7 L13,41 Z" />
-        <path
-            android:fillColor="#FFCCFBF1"
-            android:pathData="M28,7 L44,41 L36,41 L24.5,15 Z" />
-        <path
-            android:fillColor="#FF93C5FD"
-            android:pathData="M18,41 L24.5,28 L31,41 Z" />
+            android:pathData="M5,41 L21,7 L28,7 L13,41 Z M28,7 L44,41 L36,41 L24.5,15 Z M18,41 L24.5,28 L31,41 Z" />
     </group>
 </vector>

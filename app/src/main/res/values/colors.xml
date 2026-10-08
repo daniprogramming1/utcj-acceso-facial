@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="utcj_blue">#FF1565C0</color>
-    <color name="utcj_teal">#FF00695C</color>
-    <color name="utcj_teal_light">#FF4DB6AC</color>
-    <color name="ic_launcher_background">#FF00695C</color>
+    <!-- Colores de marca usados antes de Compose (splash, ventana). Mantener en sincronía con BrandConfig. -->
+    <color name="brand_primary">#FF00796B</color>
+    <color name="brand_secondary">#FF1D4ED8</color>
+    <color name="brand_navy">#FF0B1F3A</color>
+    <color name="window_background_light">#FFF7F9FB</color>
+    <color name="window_background_dark">#FF0B1220</color>
 </resources>
