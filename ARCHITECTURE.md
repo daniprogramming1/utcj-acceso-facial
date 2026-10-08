@@ -86,6 +86,7 @@ Las contraseñas olvidadas no se pueden recuperar (solo existe el hash). Restabl
 - **Manifest**: `usesCleartextTraffic=false`, `allowBackup=false`, reglas de extracción que excluyen BD y preferencias.
 - **Bitácora**: el DAO no expone `UPDATE`/`DELETE` de eventos salvo marcar `synced`; la UI es de solo lectura.
 - **Registro**: `StudentRepository.registerWithConsent` conserva un estatus BAJA/SUSPENDIDO previo (volver a registrarse no lo convierte en PENDIENTE). El permiso de cámara se pide en tiempo de ejecución (`CameraPermissionGate`) con explicación de privacidad.
+- **Preferencias cifradas dañadas**: si `EncryptedSharedPreferences` no puede abrirse (keyset dañado, clave del Keystore perdida), `SecurePrefs` borra el archivo y la clave maestra y los recrea **vacíos** (nunca sin cifrar); se registra en log y el guardia debe definir otra vez su contraseña.
 - **Kiosco**: «Llamar al guardia» solo crea una incidencia local (`IncidentRepository`), no concede acceso. La salida del kiosco sigue exigiendo reautenticación.
 - **Umbral**: el control deslizante mantiene el rango previo (0.50–0.95) y el predeterminado 0.60; por debajo de 0.60 la UI muestra una advertencia.
 

@@ -6,7 +6,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import edu.utcj.acceso.data.repository.StudentStatusRepository
-import edu.utcj.acceso.data.security.SecurePrefs
+import edu.utcj.acceso.data.security.KeyValueStore
 import edu.utcj.acceso.data.sync.SyncWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +19,7 @@ class AccesoApp : Application(), Configuration.Provider {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var statusRepository: StudentStatusRepository
-    @Inject lateinit var securePrefs: SecurePrefs
+    @Inject lateinit var securePrefs: KeyValueStore
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 

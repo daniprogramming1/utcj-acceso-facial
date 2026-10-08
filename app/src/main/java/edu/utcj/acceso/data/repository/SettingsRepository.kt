@@ -1,7 +1,7 @@
 package edu.utcj.acceso.data.repository
 
 import edu.utcj.acceso.data.biometric.FaceMatcher
-import edu.utcj.acceso.data.security.SecurePrefs
+import edu.utcj.acceso.data.security.KeyValueStore
 import edu.utcj.acceso.domain.model.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +23,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class SettingsRepository @Inject constructor(
-    private val securePrefs: SecurePrefs
+    private val securePrefs: KeyValueStore
 ) {
     companion object {
         const val KEY_FACE_THRESHOLD = "face_match_threshold"

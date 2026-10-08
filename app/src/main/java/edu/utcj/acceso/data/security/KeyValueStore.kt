@@ -13,4 +13,8 @@ interface KeyValueStore {
     fun putInt(key: String, value: Int)
     fun getBoolean(key: String, default: Boolean = false): Boolean
     fun putBoolean(key: String, value: Boolean)
+    fun getFloat(key: String, default: Float): Float
+    fun putFloat(key: String, value: Float)
+    fun remove(key: String)
+    fun contains(key: String): Boolean
 }

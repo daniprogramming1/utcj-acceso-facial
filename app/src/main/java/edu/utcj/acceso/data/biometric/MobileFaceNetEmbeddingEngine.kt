@@ -99,7 +99,10 @@ class MobileFaceNetEmbeddingEngine @Inject constructor(
                     "Entrada ${INPUT_SIZE}×${INPUT_SIZE}, embedding ${outputDim}-d."
             )
             true
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Incluye UnsatisfiedLinkError (biblioteca nativa de TFLite ausente para la ABI del equipo):
+            // se usa el motor legado en lugar de cerrar la app. Los errores de la VM sí se propagan.
+            if (e is VirtualMachineError) throw e
             Log.e(
                 TAG,
                 "Error al cargar MobileFaceNet desde assets/$MODEL_ASSET_PATH: ${e.message}. " +

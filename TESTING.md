@@ -18,6 +18,9 @@
 | `validation/PasswordStrengthTest.kt` | Medidor de fortaleza (orientativo; la regla obligatoria de 6 caracteres sigue en `GuardAuthManager`) |
 | `ui/InitialsTest.kt` | Iniciales para avatares sin foto |
 | `ui/AdminFiltersTest.kt` | Búsqueda sin acentos, filtros por estatus, filtro de bitácora, agrupación «Hoy/Ayer», límites de periodo (`LogRange`), explicación del umbral |
+| `flow/GuardFlowTest.kt` | Recorrido real con Hilt + `MainActivity` (Robolectric, Room en memoria **sin** consultas en el hilo principal): rol → configuración inicial / inicio de sesión → panel vacío y con datos → todas las secciones → kiosco; también en tableta (cajón) |
+| `data/AccessEventDaoFilterTest.kt` | Regresión: filtros opcionales en `null` de la bitácora no lanzan `NullPointerException` |
+| `security/SecurePrefsRecoveryTest.kt` | Qué errores del almacén cifrado provocan recrearlo (keyset dañado) y cuáles se propagan |
 | `screenshots/ScreenshotTests.kt` | 17 pantallas renderizadas con Robolectric (prueba de humo de la UI); con `recordRoborazziDebug` además escribe los PNG (ver §4) |
 
 Informe: `app/build/reports/tests/testDebugUnitTest/index.html`.

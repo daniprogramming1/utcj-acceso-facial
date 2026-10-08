@@ -2,7 +2,7 @@ package edu.utcj.acceso.security
 
 import edu.utcj.acceso.data.security.AuthOutcome
 import edu.utcj.acceso.data.security.GuardAuthManager
-import edu.utcj.acceso.data.security.KeyValueStore
+import edu.utcj.acceso.testutil.MemoryKeyValueStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -11,24 +11,12 @@ import org.junit.Test
 
 class GuardAuthManagerLockoutTest {
 
-    private class MemoryStore : KeyValueStore {
-        val map = mutableMapOf<String, Any>()
-        override fun getString(key: String, default: String?) = map[key] as? String ?: default
-        override fun putString(key: String, value: String) { map[key] = value }
-        override fun getLong(key: String, default: Long) = map[key] as? Long ?: default
-        override fun putLong(key: String, value: Long) { map[key] = value }
-        override fun getInt(key: String, default: Int) = map[key] as? Int ?: default
-        override fun putInt(key: String, value: Int) { map[key] = value }
-        override fun getBoolean(key: String, default: Boolean) = map[key] as? Boolean ?: default
-        override fun putBoolean(key: String, value: Boolean) { map[key] = value }
-    }
-
     private var now = 1_000_000L
     private lateinit var auth: GuardAuthManager
 
     @Before
     fun setUp() {
-        auth = GuardAuthManager(MemoryStore())
+        auth = GuardAuthManager(MemoryKeyValueStore())
         auth.clock = { now }
         auth.setPassword("correcta1".toCharArray())
     }
