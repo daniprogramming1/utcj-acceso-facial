@@ -4,13 +4,16 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import edu.utcj.acceso.data.local.AccessEventDao
 import edu.utcj.acceso.data.local.AccessEventEntity
+import edu.utcj.acceso.data.export.PdfReportBuilder
 import edu.utcj.acceso.data.sync.SyncQueue
 import edu.utcj.acceso.data.sync.SyncWorker
 import edu.utcj.acceso.domain.model.AccessEvent
 import edu.utcj.acceso.domain.model.AccessMethod
 import edu.utcj.acceso.domain.model.AccessResult
 import edu.utcj.acceso.util.TimeUtil
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.map
 import org.json.JSONObject
 import java.io.File
@@ -75,57 +78,39 @@ class AccessLogRepository @Inject constructor(
 
     suspend fun since(fromMs: Long): List<AccessEvent> = dao.getSince(fromMs).map(::toDomain)
 
-    suspend fun exportCsv(events: List<AccessEvent>): File {
-        val file = File(context.cacheDir, "acceso_export_${System.currentTimeMillis()}.csv")
+    fun observeSince(fromMs: Long): Flow<List<AccessEvent>> = observeFiltered(fromMs, null, null, null)
+
+    suspend fun exportCsv(events: List<AccessEvent>): File = withContext(Dispatchers.IO) {
+        val file = File(context.cacheDir, "bitacora_${System.currentTimeMillis()}.csv")
         file.bufferedWriter(Charsets.UTF_8).use { w ->
+            w.write("\uFEFF") // BOM: Excel abre correctamente acentos
             w.appendLine("fecha,matricula,nombre,resultado,metodo,guardia,motivo,similitud,duracion_ms")
             events.forEach { e ->
                 w.appendLine(
                     listOf(
                         TimeUtil.formatDateTime(e.datetimeMs),
                         e.matricula,
-                        "\"${e.nombre}\"",
+                        csv(e.nombre),
                         e.result.name,
                         e.method.name,
-                        e.authorizingGuard.orEmpty(),
-                        "\"${e.reason.orEmpty()}\"",
+                        csv(e.authorizingGuard.orEmpty()),
+                        csv(e.reason.orEmpty()),
                         e.similarity?.toString().orEmpty(),
                         e.verifyDurationMs?.toString().orEmpty()
                     ).joinToString(",")
                 )
             }
         }
-        return file
+        file
     }
 
-    suspend fun exportPdf(events: List<AccessEvent>): File {
-        val file = File(context.cacheDir, "acceso_export_${System.currentTimeMillis()}.pdf")
-        val pdf = android.graphics.pdf.PdfDocument()
-        val paint = android.graphics.Paint().apply { textSize = 10f }
-        val title = android.graphics.Paint().apply { textSize = 14f; isFakeBoldText = true }
-        var pageNum = 1
-        var y = 40f
-        var page = pdf.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
-        var canvas = page.canvas
-        canvas.drawText("Bitácora de acceso — Acceso UTCJ", 40f, y, title)
-        y += 24f
-        events.forEach { e ->
-            if (y > 800f) {
-                pdf.finishPage(page)
-                pageNum++
-                page = pdf.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
-                canvas = page.canvas
-                y = 40f
-            }
-            val line = "${TimeUtil.formatDateTime(e.datetimeMs)} | ${e.matricula} | ${e.nombre} | ${e.result} | ${e.method}"
-            canvas.drawText(line.take(90), 40f, y, paint)
-            y += 14f
+    suspend fun exportPdf(events: List<AccessEvent>, rangeLabel: String = "Todos los registros"): File =
+        withContext(Dispatchers.IO) {
+            val file = File(context.cacheDir, "bitacora_${System.currentTimeMillis()}.pdf")
+            PdfReportBuilder(rangeLabel = rangeLabel).write(events, file)
         }
-        pdf.finishPage(page)
-        file.outputStream().use { pdf.writeTo(it) }
-        pdf.close()
-        return file
-    }
+
+    private fun csv(v: String) = "\"" + v.replace("\"", "\"\"") + "\""
 
     private fun toDomain(e: AccessEventEntity) = AccessEvent(
         id = e.id,

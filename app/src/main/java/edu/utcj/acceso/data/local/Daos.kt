@@ -20,6 +20,9 @@ interface StudentDao {
     @Query("SELECT * FROM students WHERE matricula = :matricula LIMIT 1")
     suspend fun getByMatricula(matricula: String): StudentEntity?
 
+    @Query("SELECT * FROM students WHERE matricula = :matricula LIMIT 1")
+    fun observeByMatricula(matricula: String): Flow<StudentEntity?>
+
     @Query("SELECT * FROM students WHERE nombre LIKE '%' || :q || '%' OR matricula LIKE '%' || :q || '%' ORDER BY nombre")
     suspend fun search(q: String): List<StudentEntity>
 
@@ -52,6 +55,9 @@ interface FaceEmbeddingDao {
 
     @Query("SELECT COUNT(*) FROM face_embeddings WHERE matricula = :matricula")
     suspend fun countForStudent(matricula: String): Int
+
+    @Query("SELECT DISTINCT matricula FROM face_embeddings")
+    fun observeEnrolledMatriculas(): Flow<List<String>>
 }
 
 @Dao
