@@ -29,6 +29,11 @@ class StudentRepository @Inject constructor(
 
     suspend fun get(matricula: String): Student? = studentDao.getByMatricula(matricula)?.toDomain()
 
+    fun observe(matricula: String): Flow<Student?> = studentDao.observeByMatricula(matricula).map { it?.toDomain() }
+
+    /** Matrículas con muestras faciales registradas (para mostrar «Rostro registrado» en el panel). */
+    fun observeEnrolled(): Flow<Set<String>> = embeddingDao.observeEnrolledMatriculas().map { it.toSet() }
+
     suspend fun search(q: String): List<Student> = studentDao.search(q).map { it.toDomain() }
 
     suspend fun registerWithConsent(
@@ -38,11 +43,15 @@ class StudentRepository @Inject constructor(
         embeddings: List<FloatArray>
     ): Student {
         val now = System.currentTimeMillis()
+        // Un estatus institucional BAJA / SUSPENDIDO no se «limpia» al volver a registrarse.
+        val previous = studentDao.getByMatricula(matricula)?.status
+        val status = if (previous == StudentStatus.BAJA || previous == StudentStatus.SUSPENDIDO) previous
+        else StudentStatus.PENDING
         val entity = StudentEntity(
             matricula = matricula,
             nombre = nombre,
             carrera = carrera,
-            status = StudentStatus.PENDING,
+            status = status,
             consentVersion = ConsentRecord.CURRENT_VERSION,
             consentTimestampMs = now,
             createdAtMs = now
