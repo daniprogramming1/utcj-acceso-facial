@@ -7,6 +7,7 @@ data class ConsentRecord(
     val accepted: Boolean
 ) {
     companion object {
-        const val CURRENT_VERSION = "1.0.0"
+        /** 2.0.0: aviso sin biometría (acceso con QR). */
+        const val CURRENT_VERSION = "2.0.0"
     }
 }

@@ -1,6 +1,5 @@
 package edu.utcj.acceso.data.repository
 
-import edu.utcj.acceso.data.biometric.FaceMatcher
 import edu.utcj.acceso.data.security.KeyValueStore
 import edu.utcj.acceso.domain.model.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,11 +11,11 @@ import javax.inject.Singleton
 /**
  * App settings persisted in EncryptedSharedPreferences.
  *
- * ## Face threshold
- * Key: [KEY_FACE_THRESHOLD], default [FaceMatcher.DEFAULT_THRESHOLD] = **0.60** (MobileFaceNet)
- *
- * ## Motor facial
- * [KEY_USE_LEGACY_EMBEDDING]: si true, fuerza el histograma legado aunque exista el TFLite.
+ * ## Vigencia del QR de acceso
+ * - Alumno: [KEY_STUDENT_QR_VALIDITY] (por defecto [DEFAULT_STUDENT_QR_VALIDITY_SEC] = 60 s;
+ *   opciones [STUDENT_QR_VALIDITY_OPTIONS]). Se cambia en «Mi acceso» → «Vigencia del QR».
+ * - Guardia: [KEY_GUARD_MAX_QR_VALIDITY] (por defecto [DEFAULT_GUARD_MAX_QR_VALIDITY_SEC] = 5 min).
+ *   Un QR que dure más que esto se rechaza. Se cambia en Configuración → «Acceso con QR».
  *
  * ## Access hours
  * [KEY_HOURS_START] / [KEY_HOURS_END] — 24h local (America/Ciudad_Juarez)
@@ -26,15 +25,12 @@ class SettingsRepository @Inject constructor(
     private val securePrefs: KeyValueStore
 ) {
     companion object {
-        const val KEY_FACE_THRESHOLD = "face_match_threshold"
-        const val KEY_USE_LEGACY_EMBEDDING = "use_legacy_face_embedding"
-        const val KEY_LIVENESS = "liveness_enabled"
         const val KEY_HOURS_START = "access_hours_start"
         const val KEY_HOURS_END = "access_hours_end"
-        const val KEY_QR_SECRET = "qr_hmac_secret"
+        const val KEY_STUDENT_QR_VALIDITY = "student_qr_validity_sec"
+        const val KEY_GUARD_MAX_QR_VALIDITY = "guard_max_qr_validity_sec"
+        const val KEY_STUDENT_APPROVED_HINT = "student_marked_approved"
         const val KEY_KIOSK_IDLE_MS = "kiosk_idle_ms"
-        const val KEY_MIN_SAMPLES = "min_face_samples"
-        const val KEY_MAX_SAMPLES = "max_face_samples"
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_THEME_MODE = "ui_theme_mode"
         const val KEY_KIOSK_ORIENTATION = "kiosk_orientation"
@@ -45,6 +41,19 @@ class SettingsRepository @Inject constructor(
         /** Tiempo que el resultado (verde/rojo) permanece en el kiosco antes de volver a la cámara. */
         const val DEFAULT_KIOSK_IDLE_MS = 10_000L
         val KIOSK_IDLE_OPTIONS_MS = listOf(5_000L, 10_000L, 15_000L, 30_000L)
+        const val DEFAULT_STUDENT_QR_VALIDITY_SEC = 60
+        val STUDENT_QR_VALIDITY_OPTIONS = listOf(30, 60, 120, 300)
+        const val DEFAULT_GUARD_MAX_QR_VALIDITY_SEC = 300
+        val GUARD_MAX_QR_VALIDITY_OPTIONS = listOf(30, 60, 120, 300)
+
+        /** Claves de la versión facial (1.1.x) que se borran al actualizar. */
+        val OBSOLETE_KEYS = listOf(
+            "face_match_threshold", "use_legacy_face_embedding", "liveness_enabled",
+            "qr_hmac_secret", "min_face_samples", "max_face_samples"
+        )
+
+        /** «30 s», «1 min», «2 min»… */
+        fun validityLabel(sec: Int): String = if (sec < 60) "$sec s" else "${sec / 60} min"
     }
 
     /** Orientación del kiosco. Horizontal por defecto (tabletas en pedestal). */
@@ -53,21 +62,6 @@ class SettingsRepository @Inject constructor(
         PORTRAIT("Vertical"),
         AUTO("Automática")
     }
-
-    private val _threshold = MutableStateFlow(getFaceThreshold())
-    val faceThresholdFlow: StateFlow<Float> = _threshold.asStateFlow()
-
-    fun getFaceThreshold(): Float =
-        securePrefs.getFloat(KEY_FACE_THRESHOLD, FaceMatcher.DEFAULT_THRESHOLD)
-
-    fun setFaceThreshold(value: Float) {
-        val v = value.coerceIn(0.5f, 0.95f)
-        securePrefs.putFloat(KEY_FACE_THRESHOLD, v)
-        _threshold.value = v
-    }
-
-    fun isLivenessEnabled(): Boolean = securePrefs.getBoolean(KEY_LIVENESS, false)
-    fun setLivenessEnabled(enabled: Boolean) = securePrefs.putBoolean(KEY_LIVENESS, enabled)
 
     fun getHoursStart(): Int = securePrefs.getInt(KEY_HOURS_START, DEFAULT_HOURS_START)
     fun getHoursEnd(): Int = securePrefs.getInt(KEY_HOURS_END, DEFAULT_HOURS_END)
@@ -115,22 +109,33 @@ class SettingsRepository @Inject constructor(
         else securePrefs.putString(KEY_STUDENT_MATRICULA, matricula)
     }
 
-    fun getMinSamples(): Int = securePrefs.getInt(KEY_MIN_SAMPLES, 3)
-    fun getMaxSamples(): Int = securePrefs.getInt(KEY_MAX_SAMPLES, 5)
+    // ---- QR de acceso ----
 
-    /** Fuerza el motor de histograma legado (268-d) en lugar de MobileFaceNet. */
-    fun useLegacyFaceEmbedding(): Boolean =
-        securePrefs.getBoolean(KEY_USE_LEGACY_EMBEDDING, false)
+    fun getStudentQrValiditySec(): Int =
+        securePrefs.getInt(KEY_STUDENT_QR_VALIDITY, DEFAULT_STUDENT_QR_VALIDITY_SEC)
+            .takeIf { it in STUDENT_QR_VALIDITY_OPTIONS } ?: DEFAULT_STUDENT_QR_VALIDITY_SEC
 
-    fun setUseLegacyFaceEmbedding(enabled: Boolean) =
-        securePrefs.putBoolean(KEY_USE_LEGACY_EMBEDDING, enabled)
+    fun setStudentQrValiditySec(sec: Int) {
+        if (sec in STUDENT_QR_VALIDITY_OPTIONS) securePrefs.putInt(KEY_STUDENT_QR_VALIDITY, sec)
+    }
 
-    fun getOrCreateQrSecret(): String {
-        val existing = securePrefs.getString(KEY_QR_SECRET)
-        if (!existing.isNullOrBlank()) return existing
-        val secret = java.util.UUID.randomUUID().toString().replace("-", "") +
-            java.util.UUID.randomUUID().toString().replace("-", "")
-        securePrefs.putString(KEY_QR_SECRET, secret)
-        return secret
+    fun getGuardMaxQrValiditySec(): Int =
+        securePrefs.getInt(KEY_GUARD_MAX_QR_VALIDITY, DEFAULT_GUARD_MAX_QR_VALIDITY_SEC)
+            .takeIf { it in GUARD_MAX_QR_VALIDITY_OPTIONS } ?: DEFAULT_GUARD_MAX_QR_VALIDITY_SEC
+
+    fun setGuardMaxQrValiditySec(sec: Int) {
+        if (sec in GUARD_MAX_QR_VALIDITY_OPTIONS) securePrefs.putInt(KEY_GUARD_MAX_QR_VALIDITY, sec)
+    }
+
+    /**
+     * El alumno indicó «Ya me aprobaron» en su teléfono (el guardia aprueba en otro equipo,
+     * así que este teléfono no puede saberlo). Solo cambia qué QR se muestra primero.
+     */
+    fun isStudentMarkedApproved(): Boolean = securePrefs.getBoolean(KEY_STUDENT_APPROVED_HINT, false)
+    fun setStudentMarkedApproved(v: Boolean) = securePrefs.putBoolean(KEY_STUDENT_APPROVED_HINT, v)
+
+    /** Borra preferencias de la versión facial (umbral, motor, secreto HMAC…). Idempotente. */
+    fun purgeObsoleteKeys() {
+        OBSOLETE_KEYS.forEach { if (securePrefs.contains(it)) securePrefs.remove(it) }
     }
 }

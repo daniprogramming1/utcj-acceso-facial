@@ -29,6 +29,14 @@ object RegistrationValidator {
         }
     }
 
+    private val EMAIL = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+
+    /** El correo es opcional; si se escribe, debe tener formato válido. */
+    fun correoError(raw: String): String? {
+        val c = raw.trim()
+        return if (c.isEmpty() || EMAIL.matches(c)) null else "Revisa el formato del correo"
+    }
+
     fun isValid(matricula: String, nombre: String): Boolean =
         matriculaError(matricula) == null && nombreError(nombre) == null
 }

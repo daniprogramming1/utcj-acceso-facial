@@ -40,24 +40,16 @@ interface StudentDao {
 }
 
 @Dao
-interface FaceEmbeddingDao {
-    @Insert
-    suspend fun insert(entity: FaceEmbeddingEntity): Long
+interface UsedNonceDao {
+    /** Marca el nonce como usado. Devuelve -1 si ya existía (operación atómica en SQLite). */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun tryInsert(entity: UsedNonceEntity): Long
 
-    @Query("SELECT * FROM face_embeddings WHERE matricula = :matricula")
-    suspend fun getForStudent(matricula: String): List<FaceEmbeddingEntity>
+    @Query("SELECT COUNT(*) FROM used_nonces WHERE nonce = :nonce")
+    suspend fun exists(nonce: String): Int
 
-    @Query("SELECT * FROM face_embeddings")
-    suspend fun getAll(): List<FaceEmbeddingEntity>
-
-    @Query("DELETE FROM face_embeddings WHERE matricula = :matricula")
-    suspend fun deleteForStudent(matricula: String)
-
-    @Query("SELECT COUNT(*) FROM face_embeddings WHERE matricula = :matricula")
-    suspend fun countForStudent(matricula: String): Int
-
-    @Query("SELECT DISTINCT matricula FROM face_embeddings")
-    fun observeEnrolledMatriculas(): Flow<List<String>>
+    @Query("DELETE FROM used_nonces WHERE expiresAtMs < :nowMs")
+    suspend fun deleteExpired(nowMs: Long): Int
 }
 
 @Dao

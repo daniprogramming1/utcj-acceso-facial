@@ -10,8 +10,8 @@ import javax.inject.Singleton
 
 /**
  * Enlaces de seguridad. [SecurePrefs] (EncryptedSharedPreferences) respalda a
- * [KeyValueStore], que usa GuardAuthManager. EmbeddingCrypto y PasswordHasher
- * no requieren providers adicionales.
+ * [KeyValueStore], que usa GuardAuthManager. PasswordHasher no requiere providers
+ * adicionales. Las llaves de los QR están en [QrModule].
  */
 @Module
 @InstallIn(SingletonComponent::class)

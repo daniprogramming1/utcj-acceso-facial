@@ -18,29 +18,26 @@ data class StudentEntity(
     val consentTimestampMs: Long = 0L,
     val createdAtMs: Long = System.currentTimeMillis(),
     val approvedAtMs: Long? = null,
-    val approvedByGuard: String? = null
+    val approvedByGuard: String? = null,
+    /** Correo opcional que el alumno capturó en su registro. */
+    val correo: String? = null,
+    /**
+     * Llave pública EC P-256 (X.509, Base64) del teléfono del alumno. Con ella el guardia
+     * verifica la firma de cada QR de acceso. La llave privada nunca sale del teléfono.
+     */
+    val publicKey: String? = null
 )
 
-@Entity(
-    tableName = "face_embeddings",
-    indices = [Index("matricula")]
-)
-data class FaceEmbeddingEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+/**
+ * Nonces de QR de acceso ya presentados (anti-repetición). Se guardan hasta que el QR vence
+ * (más la tolerancia de reloj) y luego se depuran.
+ */
+@Entity(tableName = "used_nonces", indices = [Index("expiresAtMs")])
+data class UsedNonceEntity(
+    @PrimaryKey val nonce: String,
     val matricula: String,
-    /** AES-encrypted embedding bytes (never plaintext on disk). */
-    val encryptedEmbedding: ByteArray,
-    val iv: ByteArray,
-    val sampleIndex: Int,
-    val createdAtMs: Long = System.currentTimeMillis()
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is FaceEmbeddingEntity) return false
-        return id == other.id && matricula == other.matricula && sampleIndex == other.sampleIndex
-    }
-    override fun hashCode(): Int = id.hashCode()
-}
+    val expiresAtMs: Long
+)
 
 @Entity(
     tableName = "access_events",

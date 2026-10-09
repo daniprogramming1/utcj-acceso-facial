@@ -1,25 +1,23 @@
 package edu.utcj.acceso.data.repository
 
-import edu.utcj.acceso.data.biometric.EmbeddingCrypto
-import edu.utcj.acceso.data.local.FaceEmbeddingDao
-import edu.utcj.acceso.data.local.FaceEmbeddingEntity
 import edu.utcj.acceso.data.local.StudentDao
 import edu.utcj.acceso.data.local.StudentEntity
 import edu.utcj.acceso.data.remote.StudentStatusCsvDataSource
 import edu.utcj.acceso.domain.model.ConsentRecord
 import edu.utcj.acceso.domain.model.Student
 import edu.utcj.acceso.domain.model.StudentStatus
+import edu.utcj.acceso.domain.qr.RegistrationPayload
+import edu.utcj.acceso.domain.qr.StudentRecord
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.InputStream
+import java.util.Base64
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class StudentRepository @Inject constructor(
     private val studentDao: StudentDao,
-    private val embeddingDao: FaceEmbeddingDao,
-    private val crypto: EmbeddingCrypto,
     private val csvStatus: StudentStatusCsvDataSource
 ) {
     fun observeAll(): Flow<List<Student>> = studentDao.observeAll().map { list -> list.map { it.toDomain() } }
@@ -31,45 +29,66 @@ class StudentRepository @Inject constructor(
 
     fun observe(matricula: String): Flow<Student?> = studentDao.observeByMatricula(matricula).map { it?.toDomain() }
 
-    /** Matrículas con muestras faciales registradas (para mostrar «Rostro registrado» en el panel). */
-    fun observeEnrolled(): Flow<Set<String>> = embeddingDao.observeEnrolledMatriculas().map { it.toSet() }
-
     suspend fun search(q: String): List<Student> = studentDao.search(q).map { it.toDomain() }
 
+    /** Datos que usa el guardia para decidir un QR (incluye la llave pública). */
+    suspend fun record(matricula: String): StudentRecord? = studentDao.getByMatricula(matricula)?.let {
+        StudentRecord(it.matricula, it.nombre, it.carrera, it.status, it.publicKey?.let(::decodeKey))
+    }
+
+    /**
+     * Registro en el teléfono del alumno: guarda sus datos y su llave pública como PENDIENTE.
+     * Solo datos personales; ningún dato biométrico. Un estatus BAJA / SUSPENDIDO no se «limpia».
+     */
     suspend fun registerWithConsent(
         matricula: String,
         nombre: String,
         carrera: String,
-        embeddings: List<FloatArray>
+        correo: String?,
+        publicKey: ByteArray
     ): Student {
         val now = System.currentTimeMillis()
-        // Un estatus institucional BAJA / SUSPENDIDO no se «limpia» al volver a registrarse.
-        val previous = studentDao.getByMatricula(matricula)?.status
-        val status = if (previous == StudentStatus.BAJA || previous == StudentStatus.SUSPENDIDO) previous
-        else StudentStatus.PENDING
+        val previous = studentDao.getByMatricula(matricula)
+        val status = when (previous?.status) {
+            StudentStatus.BAJA, StudentStatus.SUSPENDIDO -> previous.status
+            else -> StudentStatus.PENDING
+        }
         val entity = StudentEntity(
             matricula = matricula,
             nombre = nombre,
             carrera = carrera,
+            correo = correo,
             status = status,
             consentVersion = ConsentRecord.CURRENT_VERSION,
             consentTimestampMs = now,
-            createdAtMs = now
+            createdAtMs = now,
+            publicKey = encodeKey(publicKey)
         )
         studentDao.upsert(entity)
-        embeddingDao.deleteForStudent(matricula)
-        embeddings.forEachIndexed { idx, emb ->
-            val bytes = crypto.floatArrayToBytes(emb)
-            val sealed = crypto.encrypt(bytes)
-            embeddingDao.insert(
-                FaceEmbeddingEntity(
-                    matricula = matricula,
-                    encryptedEmbedding = sealed.ciphertext,
-                    iv = sealed.iv,
-                    sampleIndex = idx
-                )
-            )
-        }
+        return entity.toDomain()
+    }
+
+    /**
+     * Aprobación en el teléfono del guardia a partir del QR de registro del alumno.
+     * Conserva fecha de alta previa (p. ej. del CSV institucional) y reemplaza la llave.
+     */
+    suspend fun approveFromRegistration(p: RegistrationPayload, guardName: String, approve: Boolean): Student {
+        val now = System.currentTimeMillis()
+        val previous = studentDao.getByMatricula(p.matricula)
+        val entity = StudentEntity(
+            matricula = p.matricula,
+            nombre = p.nombre,
+            carrera = p.carrera.ifBlank { previous?.carrera.orEmpty() },
+            correo = p.correo ?: previous?.correo,
+            status = if (approve) StudentStatus.APPROVED else StudentStatus.REJECTED,
+            consentVersion = p.consentVersion,
+            consentTimestampMs = p.issuedAtMs,
+            createdAtMs = previous?.createdAtMs ?: now,
+            approvedAtMs = now,
+            approvedByGuard = guardName,
+            publicKey = encodeKey(p.publicKey)
+        )
+        studentDao.upsert(entity)
         return entity.toDomain()
     }
 
@@ -96,23 +115,7 @@ class StudentRepository @Inject constructor(
     }
 
     suspend fun deleteStudentData(matricula: String) {
-        embeddingDao.deleteForStudent(matricula)
         studentDao.delete(matricula)
-    }
-
-    /**
-     * Galería descifrada para comparación (solo embeddings, nunca fotos).
-     * Incluye a todos los alumnos con muestras; el kiosco decide por estatus
-     * (BAJA / SUSPENDIDO / PENDING ⇒ denegado con motivo en bitácora).
-     */
-    suspend fun loadGalleryEmbeddings(): Map<String, List<FloatArray>> {
-        val all = embeddingDao.getAll()
-        return all.groupBy { it.matricula }.mapValues { (_, list) ->
-            list.map { e ->
-                val plain = crypto.decrypt(e.encryptedEmbedding, e.iv)
-                crypto.bytesToFloatArray(plain)
-            }
-        }
     }
 
     suspend fun importStatusFromAssets() {
@@ -128,7 +131,7 @@ class StudentRepository @Inject constructor(
                 }
                 studentDao.update(existing.copy(status = newStatus, nombre = row.nombre.ifBlank { existing.nombre }, carrera = row.carrera.ifBlank { existing.carrera }))
             } else {
-                // Seed directory entry without face samples
+                // Alta desde el directorio institucional (sin llave: debe presentar su QR de registro)
                 studentDao.upsert(
                     StudentEntity(
                         matricula = row.matricula,
@@ -155,8 +158,6 @@ class StudentRepository @Inject constructor(
         }
     }
 
-    suspend fun sampleCount(matricula: String): Int = embeddingDao.countForStudent(matricula)
-
     private fun StudentEntity.toDomain() = Student(
         matricula = matricula,
         nombre = nombre,
@@ -166,8 +167,15 @@ class StudentRepository @Inject constructor(
         consentTimestampMs = consentTimestampMs,
         createdAtMs = createdAtMs,
         approvedAtMs = approvedAtMs,
-        approvedByGuard = approvedByGuard
+        approvedByGuard = approvedByGuard,
+        correo = correo,
+        hasQrKey = !publicKey.isNullOrBlank()
     )
+
+    private companion object {
+        fun encodeKey(k: ByteArray): String = Base64.getEncoder().encodeToString(k)
+        fun decodeKey(s: String): ByteArray? = runCatching { Base64.getDecoder().decode(s) }.getOrNull()
+    }
 }
 
 /**

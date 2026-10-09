@@ -1,8 +1,8 @@
 package edu.utcj.acceso.domain.model
 
 /**
- * Student registered for facial access.
- * Photos are NEVER stored — only encrypted embeddings in local DB.
+ * Alumno registrado para acceso con QR firmado.
+ * Solo datos personales: no se guardan fotos ni datos biométricos.
  */
 data class Student(
     val matricula: String,
@@ -13,7 +13,10 @@ data class Student(
     val consentTimestampMs: Long = 0L,
     val createdAtMs: Long = System.currentTimeMillis(),
     val approvedAtMs: Long? = null,
-    val approvedByGuard: String? = null
+    val approvedByGuard: String? = null,
+    val correo: String? = null,
+    /** El guardia tiene la llave pública del teléfono del alumno (presentó su QR de registro). */
+    val hasQrKey: Boolean = false
 )
 
 enum class StudentStatus {
