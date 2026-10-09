@@ -26,7 +26,6 @@ import androidx.compose.ui.unit.sp
 import edu.utcj.acceso.ui.theme.AppTheme
 import edu.utcj.acceso.ui.theme.Spacing
 import edu.utcj.acceso.util.initialsOf
-import kotlin.math.abs
 
 private val AvatarPalette = listOf(
     Color(0xFF0F766E), Color(0xFF1D4ED8), Color(0xFF7C3AED), Color(0xFFB45309),
@@ -41,7 +40,7 @@ fun InitialsAvatar(
     size: Dp = 44.dp,
     color: Color? = null
 ) {
-    val bg = color ?: AvatarPalette[abs(name.hashCode()) % AvatarPalette.size]
+    val bg = color ?: AvatarPalette[Math.floorMod(name.hashCode(), AvatarPalette.size)]
     val dark = AppTheme.extended.isDark
     Box(
         modifier

@@ -10,6 +10,8 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.work.testing.WorkManagerTestInitHelper
@@ -92,12 +94,46 @@ class GuardFlowTest {
         compose.onNodeWithText("Personal de seguridad").performClick()
     }
 
+
+    /**
+     * Fuerza pasadas de DIBUJO (Robolectric no dibuja por sí solo) recorriendo los fotogramas de las
+     * animaciones del tablero, para que cualquier excepción de dibujo (NaN, tamaños negativos…) haga fallar la prueba.
+     */
+    private var drawn = 0
+
+    /** Dibuja toda la ventana en un Bitmap (ejecuta los DrawScope de Compose). */
+    private fun drawOnce() {
+        compose.waitForIdle()
+        scenario!!.onActivity { activity ->
+            val root = activity.window.decorView
+            val bmp = Bitmap.createBitmap(root.width.coerceAtLeast(1), root.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bmp))
+            bmp.recycle()
+            drawn++
+        }
+    }
+
+    private fun drawFrames(frames: Int = 40, stepMs: Long = 40) {
+        compose.mainClock.autoAdvance = false
+        try {
+            repeat(frames) {
+                compose.mainClock.advanceTimeBy(stepMs)
+                drawOnce()
+            }
+        } finally {
+            compose.mainClock.autoAdvance = true
+        }
+        check(drawn > 0) { "No se dibujó ningún fotograma" }
+    }
+
     /** Espera a que el tablero termine de cargar y recorre todas las secciones del panel. */
     private fun assertPanelWorks(expectEmpty: Boolean) {
         compose.waitForText("Actividad reciente")
+        drawFrames() // estado de carga (esqueletos) y animación de entrada de las gráficas
         if (expectEmpty) compose.waitForText("Sin actividad")
         compose.waitForText("Accesos por hora")
         compose.waitForIdle()
+        drawFrames()
 
         for ((nav, marker) in listOf(
             "Alumnos" to "Alumnos",
@@ -108,6 +144,7 @@ class GuardFlowTest {
             compose.onNode(hasText(nav) and hasClickAction(), useUnmergedTree = false).performClick()
             compose.waitForText(marker)
             compose.waitForIdle()
+            drawFrames(frames = 10)
         }
         for (item in listOf("Visitantes", "Incidencias", "Configuración")) {
             compose.onNodeWithText("Más").performClick()
@@ -117,6 +154,7 @@ class GuardFlowTest {
         }
         compose.onNodeWithText("Inicio").performClick()
         compose.waitForText("Accesos por hora")
+        drawFrames()
     }
 
     @Test
@@ -177,9 +215,11 @@ class GuardFlowTest {
         type("Contraseña", "Seguro#2026")
         compose.onNode(hasText("Entrar al panel") and hasClickAction()).performClick()
         compose.waitForText("Sin actividad")
+        drawFrames()
         for (item in listOf("Alumnos", "Aprobaciones", "Bitácora", "Visitantes", "Incidencias", "Configuración", "Inicio")) {
             compose.onNode(hasText(item) and hasClickAction()).performClick()
             compose.waitForIdle()
+            drawFrames(frames = 10)
         }
         compose.waitForText("Accesos por hora")
     }

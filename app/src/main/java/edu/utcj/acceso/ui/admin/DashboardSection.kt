@@ -1,5 +1,6 @@
 package edu.utcj.acceso.ui.admin
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,7 +84,9 @@ import edu.utcj.acceso.util.TimeUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -93,7 +96,8 @@ data class DashboardUi(
     val stats: DashboardStats = DashboardStats(),
     val alerts: List<AccessAlert> = emptyList(),
     val pendingCount: Int = 0,
-    val nowMs: Long = System.currentTimeMillis()
+    val nowMs: Long = System.currentTimeMillis(),
+    val error: String? = null
 )
 
 @HiltViewModel
@@ -112,22 +116,37 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    val ui: StateFlow<DashboardUi> = combine(
-        log.observeSince(TimeUtil.daysAgoStartMs(7)),
-        students.observePending(),
-        ticker
-    ) { events, pending, now ->
-        val todayStart = TimeUtil.startOfDayMs(now)
-        DashboardUi(
-            loading = false,
-            stats = DashboardCalculator.compute(events, now),
-            alerts = AlertsEngine.build(
-                events.filter { it.datetimeMs >= todayStart }, settings.getHoursStart(), settings.getHoursEnd()
-            ),
-            pendingCount = pending.size,
-            nowMs = now
+    /**
+     * Las consultas se crean dentro de `flow {}` y cualquier error (consulta, cálculo) se convierte
+     * en un estado con mensaje en lugar de cerrar la app: el panel debe abrir aunque falle el tablero.
+     */
+    val ui: StateFlow<DashboardUi> = flow {
+        emitAll(
+            combine(
+                log.observeSince(TimeUtil.daysAgoStartMs(7)),
+                students.observePending(),
+                ticker
+            ) { events, pending, now -> build(events, pending.size, now) }
         )
+    }.catch { e ->
+        Log.e(TAG, "No se pudo cargar el tablero", e)
+        emit(DashboardUi(loading = false, error = "No se pudieron cargar las estadísticas. Los demás módulos funcionan con normalidad."))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUi())
+
+    private fun build(events: List<AccessEvent>, pendingCount: Int, now: Long): DashboardUi {
+        val todayStart = TimeUtil.startOfDayMs(now)
+        val stats = runCatching { DashboardCalculator.compute(events, now) }
+            .onFailure { Log.e(TAG, "Error al calcular KPI", it) }
+            .getOrDefault(DashboardStats())
+        val alerts = runCatching {
+            AlertsEngine.build(events.filter { it.datetimeMs >= todayStart }, settings.getHoursStart(), settings.getHoursEnd())
+        }.onFailure { Log.e(TAG, "Error al calcular alertas", it) }.getOrDefault(emptyList())
+        return DashboardUi(loading = false, stats = stats, alerts = alerts, pendingCount = pendingCount, nowMs = now)
+    }
+
+    private companion object {
+        const val TAG = "Dashboard"
+    }
 }
 
 @Composable
@@ -172,6 +191,8 @@ fun DashboardContent(
                 verticalArrangement = Arrangement.spacedBy(Spacing.lg)
             ) {
                 HeroCard(guardName, ui, onKiosk, onManualEntry)
+
+                ui.error?.let { AlertBanner(title = it, tone = Tone.Warning, icon = Icons.Rounded.WarningAmber) }
 
                 ui.alerts.take(3).forEach { a ->
                     AlertBanner(

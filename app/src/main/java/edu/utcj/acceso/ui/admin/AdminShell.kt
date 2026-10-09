@@ -1,5 +1,6 @@
 package edu.utcj.acceso.ui.admin
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -92,6 +93,9 @@ import edu.utcj.acceso.util.AppWindowSize
 import edu.utcj.acceso.util.rememberAppWindowSize
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
@@ -143,9 +147,12 @@ class AdminViewModel @Inject constructor(
     sync: SyncRepository
 ) : ViewModel() {
     val guardName: String get() = auth.currentGuardName()
-    val pendingCount: StateFlow<Int> = students.observePending().map { it.size }
+    // Insignia y estado de sincronización son secundarios: si fallan se ocultan, no cierran la app.
+    val pendingCount: StateFlow<Int> = flow { emitAll(students.observePending().map { it.size }) }
+        .catch { Log.e("AdminViewModel", "Pendientes no disponibles", it); emit(0) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
-    val sync: StateFlow<SyncUiState?> = sync.observeStatus()
+    val sync: StateFlow<SyncUiState?> = flow<SyncUiState?> { emitAll(sync.observeStatus()) }
+        .catch { Log.e("AdminViewModel", "Estado de sincronización no disponible", it); emit(null) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun logout() = auth.logout()
