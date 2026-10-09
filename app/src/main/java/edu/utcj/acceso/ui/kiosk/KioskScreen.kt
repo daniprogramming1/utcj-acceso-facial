@@ -31,10 +31,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Face
-import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.SupportAgent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +46,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,16 +71,14 @@ import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.data.repository.SyncUiState
 import edu.utcj.acceso.ui.components.BrandLogoTile
 import edu.utcj.acceso.ui.components.CameraPermissionGate
-import edu.utcj.acceso.ui.components.CameraPreview
-import edu.utcj.acceso.ui.components.FaceGuideOverlay
-import edu.utcj.acceso.ui.components.FaceGuideStatus
 import edu.utcj.acceso.ui.components.GuidanceChip
+import edu.utcj.acceso.ui.components.QrScannerCamera
+import edu.utcj.acceso.ui.components.ScanFrameOverlay
 import edu.utcj.acceso.ui.components.SyncStatusPill
 import edu.utcj.acceso.ui.theme.KioskType
 import edu.utcj.acceso.ui.theme.Spacing
 import edu.utcj.acceso.util.TimeUtil
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /** Colores fijos del kiosco (siempre oscuro para alto contraste en vestíbulos). */
 internal object KioskColors {
@@ -99,11 +95,13 @@ fun KioskScreen(
 ) {
     val state by vm.ui.collectAsStateWithLifecycle()
     val sync by vm.sync.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     val view = LocalView.current
 
     KioskWindowEffect(vm.orientation)
+    DisposableEffect(vm) {
+        vm.setActive(true)
+        onDispose { vm.setActive(false) }
+    }
     BackHandler { onExitRequest() }
 
     // Reloj
@@ -143,20 +141,13 @@ fun KioskScreen(
         sync = sync,
         secondsLeft = secondsLeft,
         totalSeconds = totalSeconds,
-        onFingerprint = {
-            vm.clearResult()
-            (context as? Activity)?.let { a -> scope.launch { vm.verifyFingerprint(a) } }
-        },
-        onQr = vm::setModeQr,
-        onFace = vm::setModeFace,
         onCallGuard = vm::requestAssistance,
         onDismissResult = vm::clearResult,
         onExit = onExitRequest,
         cameraContent = {
             CameraPermissionGate(onDark = true) {
-                CameraPreview(Modifier.fillMaxSize()) { bmp ->
-                    if (!state.busy && state.result == null) scope.launch { vm.onFrame(bmp) }
-                }
+                // Cámara frontal: el kiosco mira a los alumnos (con respaldo a la trasera).
+                QrScannerCamera(Modifier.fillMaxSize(), front = true, paused = state.result != null, onCode = vm::onCode)
             }
         }
     )
@@ -204,9 +195,6 @@ fun KioskContent(
     sync: SyncUiState?,
     secondsLeft: Int,
     totalSeconds: Int,
-    onFingerprint: () -> Unit,
-    onQr: () -> Unit,
-    onFace: () -> Unit,
     onCallGuard: () -> Unit,
     onDismissResult: () -> Unit,
     onExit: () -> Unit,
@@ -227,7 +215,7 @@ fun KioskContent(
                     Spacer(Modifier.weight(1f))
                     KioskPrompt(state, Modifier.fillMaxWidth())
                     Spacer(Modifier.weight(1f))
-                    KioskAlternatives(state.modeQr, onFingerprint, onQr, onFace)
+                    KioskHelp(onCallGuard)
                 }
             }
         } else {
@@ -238,7 +226,7 @@ fun KioskContent(
                 Spacer(Modifier.height(Spacing.lg))
                 KioskPrompt(state, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(Spacing.lg))
-                KioskAlternatives(state.modeQr, onFingerprint, onQr, onFace)
+                KioskHelp(onCallGuard)
             }
         }
 
@@ -254,8 +242,6 @@ fun KioskContent(
                     secondsLeft = secondsLeft,
                     totalSeconds = totalSeconds,
                     assistanceRequested = state.assistanceRequested,
-                    onFingerprint = onFingerprint,
-                    onQr = onQr,
                     onCallGuard = onCallGuard,
                     onDismiss = onDismissResult
                 )
@@ -315,45 +301,20 @@ private fun KioskCamera(state: KioskViewModel.Ui, cameraContent: @Composable () 
             .border(1.dp, KioskColors.panelBorder, shape)
     ) {
         cameraContent()
-        if (!state.modeQr) {
-            FaceGuideOverlay(
-                status = state.faceStatus,
-                progress = if (state.faceStatus == FaceGuideStatus.Done) 1f else 0f,
-                scrim = Color.Black.copy(alpha = 0.45f),
-                widthFraction = 0.55f
-            )
-        } else {
-            QrFrame(Modifier.align(Alignment.Center))
-        }
-        if (!state.idle) {
-            GuidanceChip(
-                state.guidance,
-                large = true,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(Spacing.xl)
-            )
-        }
+        ScanFrameOverlay(frameFraction = 0.62f, animate = state.result == null)
+        GuidanceChip(
+            if (state.busy) "Verificando…" else "Coloca tu QR dentro del recuadro",
+            large = true,
+            icon = Icons.Rounded.QrCodeScanner,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(Spacing.xl)
+        )
     }
-}
-
-@Composable
-private fun QrFrame(modifier: Modifier) {
-    Box(
-        modifier
-            .size(260.dp)
-            .border(4.dp, BrandConfig.palette.primaryBright, RoundedCornerShape(28.dp))
-    )
 }
 
 @Composable
 private fun KioskPrompt(state: KioskViewModel.Ui, modifier: Modifier) {
-    val title: String
-    val subtitle: String
-    when {
-        state.modeQr -> { title = "Muestra tu QR"; subtitle = "Abre «Mi QR» en tu teléfono y colócalo dentro del recuadro." }
-        state.idle -> { title = "Acércate a la cámara"; subtitle = "Mira de frente al óvalo. Te identificaremos en un segundo." }
-        state.faceStatus == FaceGuideStatus.Good -> { title = "Verificando…"; subtitle = "No te muevas, casi listo." }
-        else -> { title = "Te estamos viendo"; subtitle = state.guidance }
-    }
+    val (title, subtitle) = if (state.busy) "Verificando…" to "Comprobando la firma y la vigencia de tu QR."
+    else "Muestra tu QR de acceso" to "Abre «Mi acceso» en tu teléfono y acércalo a la cámara."
     AnimatedContent(
         targetState = title to subtitle,
         transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -369,29 +330,21 @@ private fun KioskPrompt(state: KioskViewModel.Ui, modifier: Modifier) {
 }
 
 @Composable
-private fun KioskAlternatives(modeQr: Boolean, onFingerprint: () -> Unit, onQr: () -> Unit, onFace: () -> Unit) {
+private fun KioskHelp(onCallGuard: () -> Unit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.Lock, contentDescription = null, tint = BrandConfig.palette.primaryLight, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(Spacing.sm))
             Text(
-                "No guardamos fotografías · Solo vectores cifrados en este dispositivo",
+                "Sin fotos ni biometría · QR firmado de un solo uso",
                 style = MaterialTheme.typography.bodySmall,
                 color = KioskColors.textSecondary
             )
         }
         Spacer(Modifier.height(Spacing.lg))
-        Text(
-            "¿Problemas con el rostro? Usa otra opción",
-            style = MaterialTheme.typography.labelLarge,
-            color = KioskColors.textSecondary
-        )
+        Text("¿No tienes tu QR o no funciona?", style = MaterialTheme.typography.labelLarge, color = KioskColors.textSecondary)
         Spacer(Modifier.height(Spacing.sm))
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-            KioskOptionButton(Icons.Rounded.Fingerprint, "Huella", onFingerprint, Modifier.weight(1f))
-            if (modeQr) KioskOptionButton(Icons.Rounded.Face, "Rostro", onFace, Modifier.weight(1f))
-            else KioskOptionButton(Icons.Rounded.QrCodeScanner, "Código QR", onQr, Modifier.weight(1f))
-        }
+        KioskOptionButton(Icons.Rounded.SupportAgent, "Llamar al guardia", onCallGuard, Modifier.fillMaxWidth())
     }
 }
 

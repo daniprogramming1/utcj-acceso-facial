@@ -12,10 +12,10 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.EnhancedEncryption
-import androidx.compose.material.icons.rounded.Face
-import androidx.compose.material.icons.rounded.HideImage
+import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.NoPhotography
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,11 +36,11 @@ import edu.utcj.acceso.ui.components.Tone
 import edu.utcj.acceso.ui.theme.Spacing
 
 private val consentPoints: List<Pair<ImageVector, String>> = listOf(
-    Icons.Rounded.Face to "Capturaremos de 3 a 5 muestras de tu rostro únicamente para generar un vector biométrico (embedding).",
-    Icons.Rounded.HideImage to "No se almacenan fotografías: las imágenes existen solo en memoria durante la captura.",
-    Icons.Rounded.EnhancedEncryption to "El vector se cifra con AES-256 en el almacén seguro del dispositivo y se usa solo para verificar tu acceso.",
-    Icons.Rounded.History to "Se conserva un registro de este consentimiento con fecha, hora y versión.",
-    Icons.Rounded.DeleteOutline to "Puedes eliminar tus datos en cualquier momento desde «Eliminar mis datos».",
+    Icons.Rounded.Badge to "Usaremos solo tus datos personales (matrícula, nombre, carrera y, si lo das, tu correo) para identificarte en caseta.",
+    Icons.Rounded.NoPhotography to "No usamos reconocimiento facial ni datos biométricos y no tomamos fotografías.",
+    Icons.Rounded.Key to "Tu teléfono crea una llave segura que nunca sale de él; con ella firma tus códigos QR de acceso, que vencen en minutos.",
+    Icons.Rounded.History to "Seguridad registra cada entrada (fecha, hora y resultado) y conserva este consentimiento con su versión.",
+    Icons.Rounded.DeleteOutline to "Puedes eliminar tus datos y tu llave en cualquier momento desde «Eliminar mis datos».",
     Icons.Rounded.Block to "El acceso puede denegarse si tu estatus institucional es BAJA o SUSPENDIDO."
 )
 
@@ -54,7 +54,7 @@ fun ConsentContent(
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
         Column {
-            Text("Aviso de privacidad biométrica", style = MaterialTheme.typography.headlineSmall)
+            Text("Aviso de privacidad", style = MaterialTheme.typography.headlineSmall)
             Spacer(Modifier.size(Spacing.xs))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 StatusPill("Versión ${ConsentRecord.CURRENT_VERSION}", Tone.Info)
@@ -83,7 +83,7 @@ fun ConsentContent(
                 Checkbox(checked = accepted, onCheckedChange = null)
                 Spacer(Modifier.width(Spacing.md))
                 Text(
-                    "He leído y acepto el tratamiento de mis datos biométricos",
+                    "He leído y acepto el tratamiento de mis datos personales",
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.weight(1f)
                 )

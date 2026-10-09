@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Fingerprint
-import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.SupportAgent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -52,8 +50,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import edu.utcj.acceso.domain.model.AccessMethod
-import edu.utcj.acceso.ui.components.labelEs
+import edu.utcj.acceso.ui.scan.ScanCardModel
 import edu.utcj.acceso.ui.theme.AppTheme
 import edu.utcj.acceso.ui.theme.KioskType
 import edu.utcj.acceso.ui.theme.Spacing
@@ -68,22 +65,20 @@ private val DeniedBottom = Color(0xFF9B1C1C)
 /** Resultado a pantalla completa: verde «Bienvenido» o rojo «Acceso denegado». */
 @Composable
 fun KioskResultOverlay(
-    result: KioskViewModel.VerifyOutcome,
+    result: ScanCardModel,
     secondsLeft: Int,
     totalSeconds: Int,
     assistanceRequested: Boolean,
-    onFingerprint: () -> Unit,
-    onQr: () -> Unit,
     onCallGuard: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val colors = if (result.allowed) listOf(GrantedTop, GrantedBottom) else listOf(DeniedTop, DeniedBottom)
-    val known = result.matricula != "—" && result.matricula != "BIOMETRIC"
-    val title = if (result.allowed) "¡Bienvenido!" else "Acceso denegado"
+    val known = result.known
+    val title = if (result.allowed) "Acceso permitido" else "Acceso denegado"
     val a11y = buildString {
         append(title)
         if (known) append(". ${result.nombre}")
-        result.reason?.let { append(". $it") }
+        result.reasonTitle?.let { append(". $it") }
     }
     BoxWithConstraints(
         Modifier
@@ -114,15 +109,24 @@ fun KioskResultOverlay(
                     textAlign = if (landscape) TextAlign.Start else TextAlign.Center
                 )
                 Spacer(Modifier.height(Spacing.md))
-                if (known || result.method == AccessMethod.FINGERPRINT) {
+                if (known) {
                     PersonRow(result, large = large)
                 }
-                result.reason?.let {
+                result.reasonTitle?.let {
                     Spacer(Modifier.height(Spacing.md))
                     Text(
                         it,
                         style = KioskType.subtitle,
-                        color = Color.White.copy(alpha = 0.92f),
+                        color = Color.White,
+                        textAlign = if (landscape) TextAlign.Start else TextAlign.Center
+                    )
+                }
+                result.reasonDetail?.let {
+                    Spacer(Modifier.height(Spacing.xs))
+                    Text(
+                        it,
+                        style = KioskType.body,
+                        color = Color.White.copy(alpha = 0.88f),
                         textAlign = if (landscape) TextAlign.Start else TextAlign.Center
                     )
                 }
@@ -135,14 +139,10 @@ fun KioskResultOverlay(
                             Text("Se avisó al personal de seguridad", style = KioskType.body, color = Color.White)
                         }
                     } else {
-                        Text("Intenta con otra opción:", style = MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.85f))
-                        Spacer(Modifier.height(Spacing.sm))
-                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md), modifier = Modifier.widthIn(max = 640.dp)) {
-                            val c = Color.White.copy(alpha = 0.16f)
-                            KioskOptionButton(Icons.Rounded.Fingerprint, "Huella", onFingerprint, Modifier.weight(1f), container = c)
-                            KioskOptionButton(Icons.Rounded.QrCodeScanner, "QR", onQr, Modifier.weight(1f), container = c)
-                            KioskOptionButton(Icons.Rounded.SupportAgent, "Guardia", onCallGuard, Modifier.weight(1f), container = c)
-                        }
+                        KioskOptionButton(
+                            Icons.Rounded.SupportAgent, "Llamar al guardia", onCallGuard,
+                            Modifier.widthIn(max = 420.dp).fillMaxWidth(), container = Color.White.copy(alpha = 0.16f)
+                        )
                     }
                 }
                 Spacer(Modifier.height(Spacing.xl))
@@ -174,17 +174,13 @@ fun KioskResultOverlay(
 }
 
 @Composable
-private fun PersonRow(result: KioskViewModel.VerifyOutcome, large: Boolean) {
+private fun PersonRow(result: ScanCardModel, large: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(if (large) 84.dp else 64.dp).background(Color.White.copy(alpha = 0.2f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            if (result.method == AccessMethod.FINGERPRINT) {
-                Icon(Icons.Rounded.Fingerprint, contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
-            } else {
-                Text(initialsOf(result.nombre), color = Color.White, fontSize = if (large) 30.sp else 24.sp, style = MaterialTheme.typography.titleLarge)
-            }
+            Text(initialsOf(result.nombre), color = Color.White, fontSize = if (large) 30.sp else 24.sp, style = MaterialTheme.typography.titleLarge)
         }
         Spacer(Modifier.width(Spacing.lg))
         Column {
@@ -193,9 +189,9 @@ private fun PersonRow(result: KioskViewModel.VerifyOutcome, large: Boolean) {
                 maxLines = 2, overflow = TextOverflow.Ellipsis
             )
             val meta = buildList {
-                if (result.matricula != "BIOMETRIC") add("Matrícula ${result.matricula}")
+                add("Matrícula ${result.matricula}")
+                result.carrera.takeIf { it.isNotBlank() }?.let(::add)
                 add(TimeUtil.formatTime(result.timeMs))
-                add(result.method.labelEs())
             }.joinToString("  ·  ")
             Text(meta, style = if (large) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.85f))
         }

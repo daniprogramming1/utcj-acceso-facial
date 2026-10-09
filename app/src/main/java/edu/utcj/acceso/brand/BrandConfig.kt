@@ -23,7 +23,7 @@ object BrandConfig {
     const val APP_NAME = "Acceso UTCJ"
 
     /** Nombre del producto (plataforma) que se licencia a instituciones. */
-    const val PRODUCT_NAME = "Acceso Facial"
+    const val PRODUCT_NAME = "Acceso QR"
 
     const val INSTITUTION_NAME = "Universidad Tecnológica de Ciudad Juárez"
     const val INSTITUTION_SHORT = "UTCJ"

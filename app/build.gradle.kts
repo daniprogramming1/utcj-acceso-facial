@@ -16,8 +16,8 @@ android {
         applicationId = "edu.utcj.acceso"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -57,11 +57,6 @@ android {
     composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
 
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
-
-    // TFLite models must stay uncompressed for memory-mapping via AssetFileDescriptor
-    androidResources {
-        noCompress += "tflite"
-    }
 
     // Robolectric + Roborazzi (capturas de pantalla en la JVM) necesitan los recursos Android
     testOptions {
@@ -111,12 +106,9 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
 
-    implementation(libs.mlkit.face)
-    implementation(libs.mlkit.barcode)
-    implementation(libs.tensorflow.lite) // MobileFaceNet embeddings
-    implementation(libs.zxing.core) // solo para GENERAR el QR dinámico
+    implementation(libs.mlkit.barcode) // LEER los QR en el teléfono del guardia
+    implementation(libs.zxing.core) // GENERAR los QR en el teléfono del alumno
 
-    implementation(libs.androidx.biometric)
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.datastore)

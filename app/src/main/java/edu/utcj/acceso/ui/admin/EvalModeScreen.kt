@@ -54,16 +54,19 @@ class EvalModeViewModel @Inject constructor(
     private val auth: AuthRepository
 ) : ViewModel() {
     val results = dao.observeAll()
-    suspend fun record(scenario: String, passed: Boolean, notes: String, sim: Float?) {
+    suspend fun record(scenario: String, passed: Boolean, notes: String, durationMs: Long?) {
         dao.insert(
             EvalResultEntity(
-                scenario = scenario, passed = passed, notes = notes, similarity = sim, recordedBy = auth.currentGuardName()
+                scenario = scenario, passed = passed, notes = notes, durationMs = durationMs, recordedBy = auth.currentGuardName()
             )
         )
     }
 }
 
-private val scenarios = listOf("Lentes", "Cubrebocas", "Poca luz", "Contraluz", "Ángulo", "Gorra", "Gemelos", "Foto impresa")
+private val scenarios = listOf(
+    "QR válido", "QR vencido", "QR repetido (captura)", "QR de otro alumno", "Alumno dado de baja",
+    "Fuera de horario", "Brillo bajo", "Pantalla estrellada", "Reloj desfasado"
+)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -72,10 +75,10 @@ fun EvalModeScreen(onBack: () -> Unit, vm: EvalModeViewModel = hiltViewModel()) 
     var scenario by remember { mutableStateOf(scenarios.first()) }
     var notes by remember { mutableStateOf("") }
     var passed by remember { mutableStateOf(true) }
-    var similarity by remember { mutableStateOf("") }
+    var duration by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val pass = results.count { it.passed }
-    Scaffold(topBar = { AccesoTopBar(title = "Modo evaluación", subtitle = "Pruebas manuales del motor", onBack = onBack) }) { padding ->
+    Scaffold(topBar = { AccesoTopBar(title = "Modo evaluación", subtitle = "Pruebas manuales del QR", onBack = onBack) }) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = Spacing.screenCompact, vertical = Spacing.sm),
@@ -83,7 +86,7 @@ fun EvalModeScreen(onBack: () -> Unit, vm: EvalModeViewModel = hiltViewModel()) 
         ) {
             item {
                 AlertBanner("Herramienta interna", Tone.Info, Icons.Rounded.Science,
-                    message = "Documenta escenarios difíciles para calibrar el umbral. No afecta la bitácora.")
+                    message = "Documenta escenarios de prueba del acceso con QR. No afecta la bitácora.")
                 Spacer(Modifier.height(Spacing.lg))
                 Text("Escenario", style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
@@ -92,7 +95,7 @@ fun EvalModeScreen(onBack: () -> Unit, vm: EvalModeViewModel = hiltViewModel()) 
                 Spacer(Modifier.height(Spacing.sm))
                 AppTextField(scenario, { scenario = it }, "Escenario (personalizado)")
                 Spacer(Modifier.height(Spacing.sm))
-                AppTextField(similarity, { similarity = it }, "Similitud observada (opcional)", keyboardType = KeyboardType.Decimal)
+                AppTextField(duration, { duration = it.filter(Char::isDigit) }, "Tiempo de lectura en ms (opcional)", keyboardType = KeyboardType.Number)
                 Spacer(Modifier.height(Spacing.sm))
                 AppTextField(notes, { notes = it }, "Notas", singleLine = false, minLines = 2)
                 Spacer(Modifier.height(Spacing.sm))
@@ -103,8 +106,8 @@ fun EvalModeScreen(onBack: () -> Unit, vm: EvalModeViewModel = hiltViewModel()) 
                 Spacer(Modifier.height(Spacing.md))
                 PrimaryButton("Registrar resultado", onClick = {
                     scope.launch {
-                        vm.record(scenario, passed, notes, similarity.replace(',', '.').toFloatOrNull())
-                        notes = ""; similarity = ""
+                        vm.record(scenario, passed, notes, duration.toLongOrNull())
+                        notes = ""; duration = ""
                     }
                 }, modifier = Modifier.fillMaxWidth(), enabled = scenario.isNotBlank())
                 Spacer(Modifier.height(Spacing.xl))
@@ -113,7 +116,7 @@ fun EvalModeScreen(onBack: () -> Unit, vm: EvalModeViewModel = hiltViewModel()) 
             items(results, key = { it.id }) { r ->
                 AppListItem(
                     title = r.scenario,
-                    subtitle = TimeUtil.formatDateTime(r.recordedAtMs) + (r.similarity?.let { " · sim %.2f".format(it) } ?: ""),
+                    subtitle = TimeUtil.formatDateTime(r.recordedAtMs) + (r.durationMs?.let { " · $it ms" } ?: r.similarity?.let { " · sim %.2f".format(it) } ?: ""),
                     supporting = r.notes.ifBlank { null },
                     trailing = { StatusPill(if (r.passed) "Pasó" else "Falló", if (r.passed) Tone.Success else Tone.Danger) }
                 )

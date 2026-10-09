@@ -21,11 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.CloudSync
-import androidx.compose.material.icons.rounded.Face
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Key
-import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.RemoveRedEye
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.Timer
@@ -46,6 +44,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -69,7 +68,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import edu.utcj.acceso.BuildConfigProxy
 import edu.utcj.acceso.brand.BrandConfig
-import edu.utcj.acceso.data.biometric.FaceMatcher
 import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.data.repository.StudentRepository
 import edu.utcj.acceso.data.repository.StudentStatusRepository
@@ -87,29 +85,21 @@ import edu.utcj.acceso.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import edu.utcj.acceso.domain.qr.GuardPolicy
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** Valores de configuración mostrados en pantalla. */
 data class SettingsUi(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val threshold: Float = FaceMatcher.DEFAULT_THRESHOLD,
-    val liveness: Boolean = false,
-    val legacyFace: Boolean = false,
+    /** Vigencia máxima aceptada para un QR de acceso (segundos). */
+    val maxQrValiditySec: Int = SettingsRepository.DEFAULT_GUARD_MAX_QR_VALIDITY_SEC,
     val hoursStart: Int = SettingsRepository.DEFAULT_HOURS_START,
     val hoursEnd: Int = SettingsRepository.DEFAULT_HOURS_END,
     val kioskOrientation: SettingsRepository.KioskOrientation = SettingsRepository.KioskOrientation.LANDSCAPE,
     val kioskIdleMs: Long = SettingsRepository.DEFAULT_KIOSK_IDLE_MS,
     val kioskSound: Boolean = true
 )
-
-/** Explicación en lenguaje sencillo del umbral elegido. */
-fun thresholdExplanation(t: Float): String = when {
-    t < FaceMatcher.DEFAULT_THRESHOLD -> "Permisivo: reconoce más rápido pero aumenta el riesgo de confundir a dos personas."
-    t < 0.70f -> "Equilibrado (recomendado): buen balance entre seguridad y rapidez."
-    t < 0.82f -> "Estricto: menos falsos aceptados; algunos alumnos tendrán que intentar dos veces."
-    else -> "Muy estricto: máxima seguridad; espera más rechazos con poca luz o lentes."
-}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -123,9 +113,7 @@ class SettingsViewModel @Inject constructor(
 
     fun load() = SettingsUi(
         themeMode = settings.themeModeFlow.value,
-        threshold = settings.getFaceThreshold(),
-        liveness = settings.isLivenessEnabled(),
-        legacyFace = settings.useLegacyFaceEmbedding(),
+        maxQrValiditySec = settings.getGuardMaxQrValiditySec(),
         hoursStart = settings.getHoursStart(),
         hoursEnd = settings.getHoursEnd(),
         kioskOrientation = settings.getKioskOrientation(),
@@ -135,9 +123,7 @@ class SettingsViewModel @Inject constructor(
 
     fun apply(ui: SettingsUi) {
         settings.setThemeMode(ui.themeMode)
-        settings.setFaceThreshold(ui.threshold)
-        settings.setLivenessEnabled(ui.liveness)
-        settings.setUseLegacyFaceEmbedding(ui.legacyFace)
+        settings.setGuardMaxQrValiditySec(ui.maxQrValiditySec)
         settings.setHours(ui.hoursStart, ui.hoursEnd)
         settings.setKioskOrientation(ui.kioskOrientation)
         settings.setKioskIdleMs(ui.kioskIdleMs)
@@ -170,10 +156,8 @@ fun SettingsSection(vm: SettingsViewModel = hiltViewModel()) {
         sync = sync,
         snackbar = snackbar,
         onChange = { new ->
-            val engineChanged = new.legacyFace != ui.legacyFace
             ui = new
             vm.apply(new)
-            if (engineChanged) scope.launch { snackbar.showSnackbar("Reinicia la app para aplicar el cambio de motor facial") }
         },
         onImportCsv = { picker.launch(arrayOf("text/*", "text/csv", "text/comma-separated-values")) },
         onLoadSample = { scope.launch { vm.loadAssets(); snackbar.showSnackbar("CSV de ejemplo cargado") } },
@@ -207,7 +191,7 @@ fun SettingsContent(
             val hPad = if (maxWidth >= 600.dp) Spacing.screenExpanded else Spacing.screenCompact
             val left: @Composable ColumnScope.() -> Unit = {
                 AppearanceCard(ui, onChange)
-                RecognitionCard(ui, onChange)
+                QrAccessCard(ui, onChange)
                 KioskCard(ui, onChange, onKiosk)
                 HoursCard(ui, onChange)
             }
@@ -304,40 +288,30 @@ private fun AppearanceCard(ui: SettingsUi, onChange: (SettingsUi) -> Unit) {
 }
 
 @Composable
-private fun RecognitionCard(ui: SettingsUi, onChange: (SettingsUi) -> Unit) {
-    var t by remember(ui.threshold) { mutableFloatStateOf(ui.threshold) }
-    SettingsGroup("Reconocimiento facial", Icons.Rounded.Face, Tone.Info) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Umbral de coincidencia", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            Text("%.2f".format(t), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-        }
-        Slider(
-            value = t,
-            onValueChange = { t = (Math.round(it * 100) / 100f) },
-            onValueChangeFinished = { onChange(ui.copy(threshold = t)) },
-            valueRange = 0.50f..0.95f,
-            modifier = Modifier.semantics {
-                contentDescription = "Umbral de coincidencia facial"
-                stateDescription = "%.2f".format(t)
-            }
-        )
-        Text(thresholdExplanation(t), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun QrAccessCard(ui: SettingsUi, onChange: (SettingsUi) -> Unit) {
+    SettingsGroup("Acceso con QR", Icons.Rounded.QrCode2, Tone.Info) {
+        Text("Vigencia máxima aceptada", style = MaterialTheme.typography.bodyLarge)
         Text(
-            "Recomendado: %.2f (MobileFaceNet) · motor legado ≈ %.2f".format(FaceMatcher.DEFAULT_THRESHOLD, FaceMatcher.LEGACY_THRESHOLD),
-            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            "Rechaza los QR de acceso que duren más que esto, aunque el alumno elija una vigencia mayor.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        if (t < FaceMatcher.DEFAULT_THRESHOLD) {
-            Spacer(Modifier.height(Spacing.sm))
-            AlertBanner("Umbral por debajo del recomendado", Tone.Warning, Icons.Rounded.WarningAmber,
-                message = "Aumenta el riesgo de que una persona sea reconocida como otra.")
+        Spacer(Modifier.height(Spacing.sm))
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            SettingsRepository.GUARD_MAX_QR_VALIDITY_OPTIONS.forEach { sec ->
+                FilterChip(
+                    selected = ui.maxQrValiditySec == sec,
+                    onClick = { onChange(ui.copy(maxQrValiditySec = sec)) },
+                    label = { Text(SettingsRepository.validityLabel(sec)) }
+                )
+            }
         }
         HorizontalDivider(Modifier.padding(vertical = Spacing.sm))
-        SwitchRow("Prueba de vida", "Pide parpadear o girar la cabeza antes de verificar", ui.liveness, Icons.Rounded.RemoveRedEye) {
-            onChange(ui.copy(liveness = it))
-        }
-        SwitchRow("Motor legado (histograma)", "Solo para pruebas. Requiere reiniciar la app.", ui.legacyFace, Icons.Rounded.Memory) {
-            onChange(ui.copy(legacyFace = it))
-        }
+        Text(
+            "Cada QR está firmado por el teléfono del alumno, sirve una sola vez y se acepta con ±${GuardPolicy.DEFAULT_CLOCK_SKEW_SEC} s de diferencia de reloj.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -453,11 +427,11 @@ private fun AboutCard(onVersionTap: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.clickable(onClick = onVersionTap).padding(vertical = Spacing.xs)
         )
-        Text("Motor: MobileFaceNet (TFLite) + ML Kit · 100 % en el dispositivo", style = MaterialTheme.typography.bodySmall,
+        Text("Acceso con QR firmado (ECDSA P-256, Android Keystore) · lectura con ML Kit en el dispositivo", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("Soporte: ${BrandConfig.SUPPORT_EMAIL}", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Sin fotografías · Vectores biométricos cifrados (AES-GCM, Android Keystore)", style = MaterialTheme.typography.bodySmall,
+        Text("Sin fotografías ni biometría · Solo datos personales del alumno", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

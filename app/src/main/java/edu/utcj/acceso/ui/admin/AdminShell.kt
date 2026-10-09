@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.People
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.ReportProblem
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.TaskAlt
@@ -88,6 +89,7 @@ import edu.utcj.acceso.ui.components.IconBadge
 import edu.utcj.acceso.ui.components.InitialsAvatar
 import edu.utcj.acceso.ui.components.SyncStatusPill
 import edu.utcj.acceso.ui.components.Tone
+import edu.utcj.acceso.ui.scan.ScanSection
 import edu.utcj.acceso.ui.theme.Spacing
 import edu.utcj.acceso.util.AppWindowSize
 import edu.utcj.acceso.util.rememberAppWindowSize
@@ -109,6 +111,7 @@ enum class AdminSection(
     val shortLabel: String = label
 ) {
     DASHBOARD("Inicio", Icons.Rounded.Dashboard, Icons.Outlined.Dashboard),
+    SCAN("Escanear QR", Icons.Rounded.QrCodeScanner, Icons.Rounded.QrCodeScanner, shortLabel = "Escanear"),
     STUDENTS("Alumnos", Icons.Rounded.People, Icons.Outlined.People),
     APPROVALS("Aprobaciones", Icons.Rounded.TaskAlt, Icons.Outlined.TaskAlt, shortLabel = "Aprobar"),
     LOG("Bitácora", Icons.AutoMirrored.Rounded.EventNote, Icons.AutoMirrored.Rounded.EventNote),
@@ -119,9 +122,9 @@ enum class AdminSection(
     MORE("Más", Icons.Rounded.MoreHoriz, Icons.Rounded.MoreHoriz);
 
     companion object {
-        val phonePrimary = listOf(DASHBOARD, STUDENTS, APPROVALS, LOG, MORE)
-        val secondary = listOf(VISITORS, INCIDENTS, SETTINGS)
-        val all = listOf(DASHBOARD, STUDENTS, APPROVALS, LOG, VISITORS, INCIDENTS, SETTINGS)
+        val phonePrimary = listOf(DASHBOARD, SCAN, APPROVALS, LOG, MORE)
+        val secondary = listOf(STUDENTS, VISITORS, INCIDENTS, SETTINGS)
+        val all = listOf(DASHBOARD, SCAN, STUDENTS, APPROVALS, LOG, VISITORS, INCIDENTS, SETTINGS)
     }
 }
 
@@ -196,6 +199,7 @@ fun AdminShell(
     ) { s ->
         when (s) {
             AdminSection.DASHBOARD -> DashboardSection()
+            AdminSection.SCAN -> ScanSection()
             AdminSection.STUDENTS -> StudentsSection()
             AdminSection.APPROVALS -> ApprovalsSection()
             AdminSection.LOG -> AccessLogSection()
@@ -424,9 +428,10 @@ fun MoreSection(guardName: String, sync: SyncUiState?) {
             MoreItem(Icons.Rounded.Tv, Tone.Brand, "Iniciar modo kiosco", "Pantalla de verificación para alumnos", actions.onKiosk)
             MoreItem(Icons.Rounded.PersonAddAlt1, Tone.Info, "Entrada manual", "Registrar un acceso autorizado por ti") { actions.onManualEntry(null) }
             HorizontalDivider(Modifier.padding(vertical = Spacing.sm))
+            MoreItem(AdminSection.STUDENTS.icon, Tone.Brand, "Alumnos", "Directorio, estatus y QR registrados") { actions.onNavigate(AdminSection.STUDENTS) }
             MoreItem(AdminSection.VISITORS.icon, Tone.Neutral, "Visitantes", "Registro de entradas y salidas") { actions.onNavigate(AdminSection.VISITORS) }
             MoreItem(AdminSection.INCIDENTS.icon, Tone.Warning, "Incidencias", "Reportes de seguridad") { actions.onNavigate(AdminSection.INCIDENTS) }
-            MoreItem(AdminSection.SETTINGS.icon, Tone.Neutral, "Configuración", "Reconocimiento, horarios, seguridad y datos") { actions.onNavigate(AdminSection.SETTINGS) }
+            MoreItem(AdminSection.SETTINGS.icon, Tone.Neutral, "Configuración", "QR, horarios, seguridad y datos") { actions.onNavigate(AdminSection.SETTINGS) }
             HorizontalDivider(Modifier.padding(vertical = Spacing.sm))
             MoreItem(Icons.Rounded.Badge, Tone.Neutral, "Cambiar contraseña", null, actions.onChangePassword)
             MoreItem(Icons.AutoMirrored.Rounded.Logout, Tone.Danger, "Cerrar sesión", null, actions.onLogout)

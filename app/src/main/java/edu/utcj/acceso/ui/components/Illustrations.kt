@@ -98,11 +98,24 @@ private fun DrawScope.badge(center: Offset, r: Float, color: Color, ring: Color)
     checkMark(center, r, Color.White, r * 0.22f)
 }
 
-/** Teléfono con rostro y marco de escaneo. */
+private fun DrawScope.miniQr(tl: Offset, q: Float, bg: Color, ink: Color) {
+    drawRoundRect(bg, tl, Size(q, q), CornerRadius(q * 0.1f))
+    val cell = q / 9f
+    // Patrones de posición
+    listOf(Offset(1f, 1f), Offset(5f, 1f), Offset(1f, 5f)).forEach { o ->
+        drawRect(ink, tl + Offset(cell * o.x, cell * o.y), Size(cell * 3, cell * 3), style = Stroke(cell * 0.8f))
+        drawRect(ink, tl + Offset(cell * (o.x + 1), cell * (o.y + 1)), Size(cell, cell))
+    }
+    listOf(5 to 5, 6 to 6, 7 to 5, 5 to 7, 7 to 7, 6 to 4, 4 to 6).forEach { (x, y) ->
+        drawRect(ink, tl + Offset(cell * x, cell * y), Size(cell, cell))
+    }
+}
+
+/** Teléfono mostrando un QR de acceso con su cuenta regresiva. */
 @Composable
-fun FaceScanIllustration(modifier: Modifier = Modifier) {
+fun QrPhoneIllustration(modifier: Modifier = Modifier) {
     val c = illoColors()
-    Canvas(modifier.semantics { contentDescription = "Ilustración de escaneo facial" }) {
+    Canvas(modifier.semantics { contentDescription = "Ilustración de QR de acceso en el teléfono" }) {
         backdrop(c)
         val s = size.minDimension
         val cw = s * 0.46f
@@ -117,27 +130,16 @@ fun FaceScanIllustration(modifier: Modifier = Modifier) {
             Size(cw - inset * 2, ch - inset * 2),
             CornerRadius(s * 0.05f)
         )
-        val faceC = Offset(center.x, center.y - s * 0.02f)
-        bust(faceC, s * 0.42f, c.skin, c.skin.copy(alpha = 0.7f))
-        // marco de escaneo
-        val b = s * 0.16f
-        val l = s * 0.055f
-        val sw = s * 0.018f
-        val corners = listOf(
-            Offset(faceC.x - b, faceC.y - b) to Offset(1f, 1f),
-            Offset(faceC.x + b, faceC.y - b) to Offset(-1f, 1f),
-            Offset(faceC.x - b, faceC.y + b) to Offset(1f, -1f),
-            Offset(faceC.x + b, faceC.y + b) to Offset(-1f, -1f)
-        )
-        corners.forEach { (p, d) ->
-            drawLine(c.bright, p, p + Offset(l * d.x, 0f), sw, StrokeCap.Round)
-            drawLine(c.bright, p, p + Offset(0f, l * d.y), sw, StrokeCap.Round)
-        }
-        drawLine(
-            Brush.horizontalGradient(listOf(Color.Transparent, c.bright, Color.Transparent), faceC.x - b, faceC.x + b),
-            Offset(faceC.x - b, faceC.y + s * 0.01f),
-            Offset(faceC.x + b, faceC.y + s * 0.01f),
-            strokeWidth = s * 0.012f
+        val q = cw * 0.66f
+        miniQr(Offset(center.x - q / 2, tl.y + ch * 0.16f), q, Color.White, c.ink)
+        // anillo de cuenta regresiva
+        val rc = Offset(center.x, tl.y + ch * 0.80f)
+        val rr = s * 0.045f
+        drawCircle(Color.White.copy(alpha = 0.25f), rr, rc, style = Stroke(s * 0.012f))
+        drawArc(
+            c.bright, -90f, 250f, false,
+            topLeft = rc - Offset(rr, rr), size = Size(rr * 2, rr * 2),
+            style = Stroke(s * 0.012f, cap = StrokeCap.Round)
         )
         badge(Offset(tl.x + cw - s * 0.02f, tl.y + ch - s * 0.06f), s * 0.075f, c.success, c.surface)
     }
@@ -190,11 +192,11 @@ fun PrivacyShieldIllustration(modifier: Modifier = Modifier) {
     }
 }
 
-/** Kiosco con óvalo facial, verificación y respaldo QR. */
+/** Caseta: teléfono del guardia leyendo el QR del alumno y resultado verde. */
 @Composable
 fun HowItWorksIllustration(modifier: Modifier = Modifier) {
     val c = illoColors()
-    Canvas(modifier.semantics { contentDescription = "Ilustración del kiosco de acceso" }) {
+    Canvas(modifier.semantics { contentDescription = "Ilustración del escaneo del QR en caseta" }) {
         backdrop(c)
         val s = size.minDimension
         val w = s * 0.62f
@@ -202,37 +204,29 @@ fun HowItWorksIllustration(modifier: Modifier = Modifier) {
         val tl = Offset(center.x - w / 2, center.y - h / 2 - s * 0.03f)
         drawRoundRect(c.shadow, tl + Offset(s * 0.02f, s * 0.03f), Size(w, h), CornerRadius(s * 0.05f))
         drawRoundRect(c.ink, tl, Size(w, h), CornerRadius(s * 0.05f))
-        // soporte
         drawRoundRect(c.ink.copy(alpha = 0.85f), Offset(center.x - s * 0.03f, tl.y + h), Size(s * 0.06f, s * 0.10f))
         drawRoundRect(c.ink.copy(alpha = 0.85f), Offset(center.x - s * 0.13f, tl.y + h + s * 0.09f), Size(s * 0.26f, s * 0.035f), CornerRadius(s * 0.02f))
-        // óvalo
-        val ow = h * 0.52f
-        val oh = h * 0.70f
-        val oc = Offset(tl.x + w * 0.36f, tl.y + h / 2)
-        bust(oc + Offset(0f, s * 0.01f), s * 0.24f, c.skin, c.skin.copy(alpha = 0.7f))
-        drawOval(
-            c.bright,
-            topLeft = Offset(oc.x - ow / 2, oc.y - oh / 2),
-            size = Size(ow, oh),
-            style = Stroke(width = s * 0.014f)
-        )
+        // recuadro de escaneo con QR
+        val b = h * 0.62f
+        val fc = Offset(tl.x + w * 0.34f, tl.y + h / 2)
+        miniQr(Offset(fc.x - b * 0.36f, fc.y - b * 0.36f), b * 0.72f, Color.White, c.ink)
+        val l = b * 0.22f
+        val sw = s * 0.014f
+        listOf(
+            Offset(fc.x - b / 2, fc.y - b / 2) to Offset(1f, 1f),
+            Offset(fc.x + b / 2, fc.y - b / 2) to Offset(-1f, 1f),
+            Offset(fc.x - b / 2, fc.y + b / 2) to Offset(1f, -1f),
+            Offset(fc.x + b / 2, fc.y + b / 2) to Offset(-1f, -1f)
+        ).forEach { (p, d) ->
+            drawLine(c.bright, p, p + Offset(l * d.x, 0f), sw, StrokeCap.Round)
+            drawLine(c.bright, p, p + Offset(0f, l * d.y), sw, StrokeCap.Round)
+        }
+        drawLine(c.bright, Offset(fc.x - b * 0.42f, fc.y + b * 0.08f), Offset(fc.x + b * 0.42f, fc.y + b * 0.08f), s * 0.01f, StrokeCap.Round)
         // panel de resultado
         val px = tl.x + w * 0.64f
         drawRoundRect(c.success.copy(alpha = 0.22f), Offset(px, tl.y + h * 0.22f), Size(w * 0.28f, h * 0.56f), CornerRadius(s * 0.025f))
         badge(Offset(px + w * 0.14f, tl.y + h * 0.42f), s * 0.045f, c.success, c.success.copy(alpha = 0.25f))
         drawRoundRect(Color.White.copy(alpha = 0.8f), Offset(px + w * 0.04f, tl.y + h * 0.62f), Size(w * 0.20f, s * 0.014f), CornerRadius(s * 0.01f))
-        // chip QR
-        val qx = center.x + s * 0.20f
-        val qy = center.y + s * 0.18f
-        val q = s * 0.13f
-        drawRoundRect(c.surface, Offset(qx, qy), Size(q, q), CornerRadius(s * 0.02f))
-        val cell = q / 7f
-        listOf(
-            0 to 0, 1 to 0, 0 to 1, 1 to 1, 5 to 0, 4 to 0, 5 to 1, 4 to 1, 0 to 5, 1 to 5, 0 to 4, 1 to 4,
-            3 to 2, 4 to 3, 2 to 4, 3 to 5, 5 to 5, 5 to 3
-        ).forEach { (x, y) ->
-            drawRect(c.ink, Offset(qx + cell * (x + 0.5f), qy + cell * (y + 0.5f)), Size(cell, cell))
-        }
     }
 }
 

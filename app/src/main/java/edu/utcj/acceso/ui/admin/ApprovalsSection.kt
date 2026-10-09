@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,8 +18,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.QrCode2
+import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -53,15 +56,14 @@ import edu.utcj.acceso.ui.theme.Spacing
 import edu.utcj.acceso.util.TimeUtil
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class ApprovalsUi(
     val loading: Boolean = true,
-    val pending: List<Student> = emptyList(),
-    val enrolled: Set<String> = emptySet()
+    val pending: List<Student> = emptyList()
 )
 
 @HiltViewModel
@@ -69,8 +71,8 @@ class ApprovalsViewModel @Inject constructor(
     private val students: StudentRepository,
     private val auth: AuthRepository
 ) : ViewModel() {
-    val ui: StateFlow<ApprovalsUi> = combine(students.observePending(), students.observeEnrolled()) { p, e ->
-        ApprovalsUi(false, p.sortedBy { it.createdAtMs }, e)
+    val ui: StateFlow<ApprovalsUi> = students.observePending().map { p ->
+        ApprovalsUi(false, p.sortedBy { it.createdAtMs })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ApprovalsUi())
 
     fun approve(m: String) = viewModelScope.launch { students.approve(m, auth.currentGuardName()) }
@@ -82,9 +84,11 @@ fun ApprovalsSection(vm: ApprovalsViewModel = hiltViewModel()) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val actions = LocalAdminActions.current
     ApprovalsContent(
         ui = ui,
         snackbar = snackbar,
+        onScan = { actions.onNavigate(AdminSection.SCAN) },
         onApprove = { vm.approve(it.matricula); scope.launch { snackbar.showSnackbar("${it.nombre} ya puede entrar") } },
         onReject = { vm.reject(it.matricula); scope.launch { snackbar.showSnackbar("Registro rechazado") } }
     )
@@ -94,6 +98,7 @@ fun ApprovalsSection(vm: ApprovalsViewModel = hiltViewModel()) {
 fun ApprovalsContent(
     ui: ApprovalsUi,
     snackbar: SnackbarHostState? = null,
+    onScan: () -> Unit = {},
     onApprove: (Student) -> Unit,
     onReject: (Student) -> Unit
 ) {
@@ -103,17 +108,19 @@ fun ApprovalsContent(
         subtitle = if (ui.pending.isEmpty()) "Sin solicitudes" else "${ui.pending.size} por revisar",
         snackbarHostState = snackbar
     ) { padding ->
+      Column(Modifier.fillMaxSize().padding(padding)) {
+        ScanRegistrationCta(onScan, Modifier.padding(horizontal = Spacing.screenCompact, vertical = Spacing.sm))
         when {
-            ui.loading -> SkeletonList(modifier = Modifier.padding(padding).padding(horizontal = Spacing.screenCompact))
+            ui.loading -> SkeletonList(modifier = Modifier.padding(horizontal = Spacing.screenCompact))
             ui.pending.isEmpty() -> EmptyState(
                 title = "Todo al día",
-                message = "No hay registros pendientes de aprobación. Te avisaremos con un indicador en el menú.",
+                message = "Los alumnos se registran en su propio teléfono. Escanea su QR de registro para aprobarlos.",
                 illustration = { SuccessIllustration(Modifier.size(150.dp)) },
-                modifier = Modifier.fillMaxSize().padding(padding)
+                modifier = Modifier.fillMaxSize()
             )
             else -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 320.dp),
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = Spacing.screenCompact, vertical = Spacing.sm),
                 verticalArrangement = Arrangement.spacedBy(Spacing.md),
                 horizontalArrangement = Arrangement.spacedBy(Spacing.md)
@@ -135,9 +142,9 @@ fun ApprovalsContent(
                         Spacer(Modifier.height(Spacing.md))
                         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                             StatusPill(
-                                if (s.matricula in ui.enrolled) "Rostro capturado" else "Sin rostro",
-                                if (s.matricula in ui.enrolled) Tone.Success else Tone.Warning,
-                                icon = Icons.Rounded.Face
+                                if (s.hasQrKey) "QR registrado" else "Sin QR",
+                                if (s.hasQrKey) Tone.Success else Tone.Warning,
+                                icon = Icons.Rounded.QrCode2
                             )
                             if (s.consentTimestampMs > 0) StatusPill("Consentimiento", Tone.Info, icon = Icons.Rounded.VerifiedUser)
                         }
@@ -156,16 +163,39 @@ fun ApprovalsContent(
                 }
             }
         }
+      }
     }
     toReject?.let { s ->
         ConfirmDialog(
             title = "¿Rechazar a ${s.nombre}?",
-            message = "No podrá entrar con reconocimiento facial. Puedes aprobarlo más tarde desde Alumnos.",
+            message = "Sus QR de acceso serán rechazados. Puedes aprobarlo más tarde desde Alumnos.",
             confirmText = "Rechazar",
             destructive = true,
             icon = Icons.Rounded.Block,
             onDismiss = { toReject = null },
             onConfirm = { toReject = null; onReject(s) }
         )
+    }
+}
+
+/** Acción principal de Aprobaciones: escanear el QR de registro del alumno. */
+@Composable
+private fun ScanRegistrationCta(onScan: () -> Unit, modifier: Modifier = Modifier) {
+    AppCard(modifier.fillMaxWidth(), onClick = onScan, color = MaterialTheme.colorScheme.primaryContainer, border = false) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Rounded.QrCodeScanner, contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(40.dp)
+            )
+            Spacer(Modifier.width(Spacing.md))
+            Column(Modifier.weight(1f)) {
+                Text("Escanear QR", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text(
+                    "Escanea el QR de registro del alumno para ver sus datos y aprobarlo.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
     }
 }

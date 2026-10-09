@@ -42,18 +42,24 @@ import edu.utcj.acceso.ui.components.PrimaryButton
 import edu.utcj.acceso.ui.components.StudentIllustration
 import edu.utcj.acceso.ui.theme.Spacing
 import kotlinx.coroutines.launch
+import edu.utcj.acceso.domain.qr.QrKeyStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class StudentAccessViewModel @Inject constructor(
     private val students: StudentRepository,
-    private val settings: SettingsRepository
+    private val settings: SettingsRepository,
+    private val keys: QrKeyStore
 ) : ViewModel() {
     /** @return mensaje de error o null si se abrió correctamente. */
     suspend fun open(raw: String): String? {
         RegistrationValidator.matriculaError(raw)?.let { return it }
         val mat = RegistrationValidator.normalizeMatricula(raw)
-        students.get(mat) ?: return "No encontramos un registro con esa matrícula"
+        val student = students.get(mat)
+        val hasKey = withContext(Dispatchers.Default) { runCatching { keys.get(mat) != null }.getOrDefault(false) }
+        if (student == null || !hasKey) return "No hay un registro de esa matrícula en este teléfono. Regístrate aquí."
         settings.setRememberedStudent(mat)
         return null
     }
@@ -91,7 +97,7 @@ fun StudentAccessScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "Consulta tu estatus de aprobación y genera tu QR dinámico de respaldo.",
+                    "Abre tu QR de registro o tu QR de acceso. Solo funciona en el teléfono donde te registraste.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

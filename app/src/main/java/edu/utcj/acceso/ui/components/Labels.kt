@@ -61,9 +61,10 @@ fun AccessResult.tone(): Tone = when (this) {
 }
 
 fun AccessMethod.labelEs(): String = when (this) {
+    // FACE / FINGERPRINT solo aparecen en registros históricos (versiones 1.1.x).
     AccessMethod.FACE -> "Rostro"
     AccessMethod.FINGERPRINT -> "Huella"
-    AccessMethod.QR -> "QR dinámico"
+    AccessMethod.QR -> "QR"
     AccessMethod.MANUAL -> "Manual"
     AccessMethod.FALLBACK -> "Respaldo"
 }

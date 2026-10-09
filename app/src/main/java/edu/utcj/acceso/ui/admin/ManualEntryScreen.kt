@@ -82,7 +82,7 @@ class ManualEntryViewModel @Inject constructor(
 }
 
 private val quickReasons = listOf(
-    "Falla de reconocimiento", "Credencial física verificada", "Sin teléfono para QR", "Evento autorizado", "Proveedor / personal"
+    "QR no funciona", "Credencial física verificada", "Sin teléfono para QR", "Evento autorizado", "Proveedor / personal"
 )
 
 @OptIn(ExperimentalLayoutApi::class)

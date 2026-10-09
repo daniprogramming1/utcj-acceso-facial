@@ -7,7 +7,7 @@ import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel
 
-/** Genera el bitmap del QR dinámico (ZXing, solo generación). */
+/** Genera el bitmap de un QR (ZXing, solo generación; ECC M). */
 object QrRenderer {
     fun render(content: String, sizePx: Int = 640, foreground: Int = Color.rgb(11, 31, 58)): Bitmap {
         val hints = mapOf(EncodeHintType.MARGIN to 1, EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M)

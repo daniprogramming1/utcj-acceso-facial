@@ -21,7 +21,8 @@ import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.DeleteForever
-import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.PersonAddAlt1
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.SearchOff
@@ -108,7 +109,6 @@ data class StudentsUi(
     val query: String = "",
     val filter: StudentFilter = StudentFilter.ALL,
     val students: List<Student> = emptyList(),
-    val enrolled: Set<String> = emptySet(),
     val counts: Map<StudentFilter, Int> = emptyMap()
 )
 
@@ -120,13 +120,12 @@ class StudentsViewModel @Inject constructor(
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow(StudentFilter.ALL)
 
-    val ui: StateFlow<StudentsUi> = combine(repo.observeAll(), repo.observeEnrolled(), query, filter) { all, enrolled, q, f ->
+    val ui: StateFlow<StudentsUi> = combine(repo.observeAll(), query, filter) { all, q, f ->
         StudentsUi(
             loading = false,
             query = q,
             filter = f,
             students = filterStudents(all, q, f),
-            enrolled = enrolled,
             counts = StudentFilter.entries.associateWith { sf -> all.count { sf.matches(it.status) } }
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), StudentsUi())
@@ -151,7 +150,7 @@ fun StudentsSection(vm: StudentsViewModel = hiltViewModel()) {
         onFilter = vm::setFilter,
         onApprove = { vm.approve(it.matricula); scope.launch { snackbar.showSnackbar("${it.nombre} aprobado") } },
         onReject = { vm.reject(it.matricula); scope.launch { snackbar.showSnackbar("Registro de ${it.nombre} rechazado") } },
-        onDelete = { vm.delete(it.matricula); scope.launch { snackbar.showSnackbar("Datos biométricos de ${it.nombre} eliminados") } },
+        onDelete = { vm.delete(it.matricula); scope.launch { snackbar.showSnackbar("Datos de ${it.nombre} eliminados") } },
         onManualEntry = { actions.onManualEntry(it.matricula) }
     )
 }
@@ -203,9 +202,9 @@ fun StudentsContent(
                             trailing = {
                                 Column(horizontalAlignment = Alignment.End) {
                                     StudentStatusChip(s.status)
-                                    if (s.matricula !in ui.enrolled) {
+                                    if (!s.hasQrKey) {
                                         Spacer(Modifier.height(2.dp))
-                                        Text("Sin rostro", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Sin QR", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             },
@@ -221,7 +220,6 @@ fun StudentsContent(
     selected?.let { s ->
         StudentDetailSheet(
             student = s,
-            enrolled = s.matricula in ui.enrolled,
             onDismiss = { selected = null },
             onApprove = { onApprove(s); selected = null },
             onReject = { onReject(s); selected = null },
@@ -255,7 +253,6 @@ fun <T> FilterRow(options: List<T>, selected: T, label: (T) -> String, onSelect:
 @Composable
 private fun StudentDetailSheet(
     student: Student,
-    enrolled: Boolean,
     onDismiss: () -> Unit,
     onApprove: () -> Unit,
     onReject: () -> Unit,
@@ -278,7 +275,8 @@ private fun StudentDetailSheet(
             }
             Spacer(Modifier.height(Spacing.lg))
             DetailRow("Carrera", student.carrera.ifBlank { "—" }, icon = Icons.Rounded.School)
-            DetailRow("Rostro registrado", if (enrolled) "Sí (cifrado)" else "No", icon = Icons.Rounded.Face)
+            DetailRow("QR registrado", if (student.hasQrKey) "Sí (llave pública guardada)" else "No: debe mostrar su QR de registro", icon = Icons.Rounded.QrCode2)
+            student.correo?.let { DetailRow("Correo", it, icon = Icons.Rounded.Email) }
             DetailRow("Registro", TimeUtil.formatShortDate(student.createdAtMs), icon = Icons.Rounded.CalendarMonth)
             DetailRow(
                 "Consentimiento",
@@ -300,13 +298,13 @@ private fun StudentDetailSheet(
             }
             SecondaryButton("Registrar entrada manual", onManualEntry, Modifier.fillMaxWidth(), icon = Icons.Rounded.PersonAddAlt1)
             Spacer(Modifier.height(Spacing.md))
-            DangerButton("Eliminar datos biométricos", { confirmDelete = true }, Modifier.fillMaxWidth(), icon = Icons.Rounded.DeleteForever)
+            DangerButton("Eliminar datos del alumno", { confirmDelete = true }, Modifier.fillMaxWidth(), icon = Icons.Rounded.DeleteForever)
         }
     }
     if (confirmDelete) {
         ConfirmDialog(
             title = "¿Eliminar datos de ${student.nombre}?",
-            message = "Se borrarán su registro y sus vectores biométricos. Tendrá que registrarse de nuevo. La bitácora se conserva.",
+            message = "Se borrarán su registro y su llave pública: sus QR dejarán de funcionar y tendrá que registrarse de nuevo. La bitácora se conserva.",
             confirmText = "Eliminar",
             destructive = true,
             icon = Icons.Rounded.DeleteForever,
@@ -317,7 +315,7 @@ private fun StudentDetailSheet(
     if (confirmReject) {
         ConfirmDialog(
             title = "¿Rechazar registro?",
-            message = "${student.nombre} no podrá entrar con reconocimiento facial hasta que se apruebe.",
+            message = "Los QR de ${student.nombre} serán rechazados hasta que se apruebe.",
             confirmText = "Rechazar",
             destructive = true,
             icon = Icons.Rounded.Block,

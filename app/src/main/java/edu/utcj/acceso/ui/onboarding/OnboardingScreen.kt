@@ -48,8 +48,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import edu.utcj.acceso.brand.BrandConfig
 import edu.utcj.acceso.ui.components.BrandLockup
-import edu.utcj.acceso.ui.components.FaceScanIllustration
 import edu.utcj.acceso.ui.components.HowItWorksIllustration
+import edu.utcj.acceso.ui.components.QrPhoneIllustration
 import edu.utcj.acceso.ui.components.LinkButton
 import edu.utcj.acceso.ui.components.PrimaryButton
 import edu.utcj.acceso.ui.components.PrivacyShieldIllustration
@@ -68,21 +68,21 @@ data class OnboardingPage(
 
 val onboardingPages = listOf(
     OnboardingPage(
-        title = "Entra al campus con tu rostro",
-        body = "${BrandConfig.APP_NAME} verifica tu identidad en segundos, sin credenciales ni filas.",
+        title = "Entra al campus con tu QR",
+        body = "${BrandConfig.APP_NAME} genera en tu teléfono un QR de acceso que cambia solo y vence en minutos.",
         bullets = listOf(
-            Icons.Rounded.Speed to "Verificación en menos de 2 segundos",
+            Icons.Rounded.Speed to "El guardia lo escanea y ve quién eres al instante",
             Icons.Rounded.WifiOff to "Funciona incluso sin conexión",
-            Icons.Rounded.QrCode2 to "Respaldo con QR dinámico o huella"
+            Icons.Rounded.QrCode2 to "Cada QR sirve una sola vez"
         ),
-        illustration = { FaceScanIllustration(it) }
+        illustration = { QrPhoneIllustration(it) }
     ),
     OnboardingPage(
         title = "Tu privacidad, primero",
-        body = "Diseñada para proteger tus datos biométricos desde el primer momento.",
+        body = "Sin reconocimiento facial ni biometría: solo tus datos de alumno.",
         bullets = listOf(
-            Icons.Rounded.HideImage to "Nunca guardamos fotografías de tu rostro",
-            Icons.Rounded.EnhancedEncryption to "Solo un vector cifrado (AES-256) en el dispositivo",
+            Icons.Rounded.HideImage to "No tomamos ni guardamos fotografías",
+            Icons.Rounded.EnhancedEncryption to "Tu teléfono firma cada QR con una llave que nunca sale de él",
             Icons.Rounded.DeleteOutline to "Elimina tus datos cuando quieras"
         ),
         illustration = { PrivacyShieldIllustration(it) }
@@ -91,9 +91,9 @@ val onboardingPages = listOf(
         title = "Así funciona",
         body = "Tres pasos y listo para entrar.",
         bullets = listOf(
-            Icons.Rounded.HowToReg to "1. Regístrate y acepta el aviso de privacidad",
-            Icons.Rounded.VerifiedUser to "2. Seguridad aprueba tu registro",
-            Icons.Rounded.CheckCircle to "3. Mira al kiosco y entra"
+            Icons.Rounded.HowToReg to "1. Regístrate en tu teléfono y acepta el aviso",
+            Icons.Rounded.VerifiedUser to "2. Muestra tu QR de registro en caseta para que te aprueben",
+            Icons.Rounded.CheckCircle to "3. En cada entrada, muestra tu QR de acceso"
         ),
         illustration = { HowItWorksIllustration(it) }
     )

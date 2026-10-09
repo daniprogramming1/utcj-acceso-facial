@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -27,21 +26,30 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
-import androidx.compose.material.icons.rounded.EnhancedEncryption
-import androidx.compose.material.icons.rounded.Face
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.HowToReg
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +62,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -61,31 +71,34 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import edu.utcj.acceso.data.biometric.QrTokenManager
 import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.data.repository.StudentRepository
+import edu.utcj.acceso.domain.model.ConsentRecord
 import edu.utcj.acceso.domain.model.Student
 import edu.utcj.acceso.domain.model.StudentStatus
+import edu.utcj.acceso.domain.qr.QrCrypto
+import edu.utcj.acceso.domain.qr.QrKeyStore
+import edu.utcj.acceso.domain.qr.QrSigner
 import edu.utcj.acceso.ui.components.AccesoTopBar
 import edu.utcj.acceso.ui.components.AlertBanner
 import edu.utcj.acceso.ui.components.AppCard
 import edu.utcj.acceso.ui.components.ConfirmDialog
 import edu.utcj.acceso.ui.components.DetailRow
 import edu.utcj.acceso.ui.components.InitialsAvatar
-import edu.utcj.acceso.ui.components.PendingIllustration
 import edu.utcj.acceso.ui.components.PrimaryButton
 import edu.utcj.acceso.ui.components.SecondaryButton
 import edu.utcj.acceso.ui.components.SectionHeader
-import edu.utcj.acceso.ui.components.StudentStatusChip
-import edu.utcj.acceso.ui.components.SuccessIllustration
+import edu.utcj.acceso.ui.components.StatusPill
 import edu.utcj.acceso.ui.components.Tone
 import edu.utcj.acceso.ui.components.TonalButton
 import edu.utcj.acceso.ui.components.labelEs
 import edu.utcj.acceso.ui.components.screenHorizontalPadding
 import edu.utcj.acceso.ui.theme.AppTheme
 import edu.utcj.acceso.ui.theme.Spacing
+import edu.utcj.acceso.util.MaxBrightnessEffect
 import edu.utcj.acceso.util.TimeUtil
 import edu.utcj.acceso.util.isCompactWidth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,58 +107,114 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-/** QR vigente con su cuenta regresiva. */
+/** QR de acceso vigente con su cuenta regresiva. */
 data class QrUi(val image: ImageBitmap, val secondsLeft: Int, val totalSeconds: Int)
+
+/** Pestañas del inicio del alumno. */
+enum class StudentQrTab(val label: String) { ACCESS("QR de acceso"), REGISTRATION("QR de registro") }
 
 @HiltViewModel
 class StudentHomeViewModel @Inject constructor(
     private val students: StudentRepository,
     private val settings: SettingsRepository,
-    private val qrTokens: QrTokenManager
+    private val keys: QrKeyStore
 ) : ViewModel() {
     val matricula: String? = settings.getRememberedStudent()
 
     val student: StateFlow<Student?> = (matricula?.let { students.observe(it) } ?: flowOf(null))
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val _samples = MutableStateFlow(0)
-    val samples: StateFlow<Int> = _samples.asStateFlow()
+    private val _hasKey = MutableStateFlow(true)
+    val hasKey: StateFlow<Boolean> = _hasKey.asStateFlow()
 
-    private val _qr = MutableStateFlow<QrUi?>(null)
-    val qr: StateFlow<QrUi?> = _qr.asStateFlow()
-    private var qrJob: Job? = null
+    private val _tab = MutableStateFlow(if (settings.isStudentMarkedApproved()) StudentQrTab.ACCESS else StudentQrTab.REGISTRATION)
+    val tab: StateFlow<StudentQrTab> = _tab.asStateFlow()
+
+    private val _validity = MutableStateFlow(settings.getStudentQrValiditySec())
+    val validity: StateFlow<Int> = _validity.asStateFlow()
+
+    private val _registrationQr = MutableStateFlow<ImageBitmap?>(null)
+    val registrationQr: StateFlow<ImageBitmap?> = _registrationQr.asStateFlow()
+
+    private val _accessQr = MutableStateFlow<QrUi?>(null)
+    val accessQr: StateFlow<QrUi?> = _accessQr.asStateFlow()
+
+    private var signer: QrSigner? = null
+    private var accessJob: Job? = null
 
     init {
-        viewModelScope.launch { matricula?.let { _samples.value = students.sampleCount(it) } }
+        viewModelScope.launch {
+            val mat = matricula ?: return@launch
+            signer = withContext(Dispatchers.Default) { runCatching { keys.get(mat) }.getOrNull() }
+            _hasKey.value = signer != null
+            val s = students.get(mat)
+            // Mismo equipo que el guardia (demo) o aprobado: abrir directo en el QR de acceso.
+            if (s?.status?.allowsAccess() == true) _tab.value = StudentQrTab.ACCESS
+            buildRegistrationQr(s)
+        }
     }
 
-    fun showQr() {
+    private suspend fun buildRegistrationQr(s: Student?) {
+        val sg = signer ?: return
+        val st = s ?: return
+        _registrationQr.value = withContext(Dispatchers.Default) {
+            val ts = st.consentTimestampMs.takeIf { it > 0 } ?: System.currentTimeMillis()
+            val raw = QrCrypto.registrationQr(
+                sg, st.matricula, st.nombre, st.carrera, st.correo,
+                st.consentVersion.ifBlank { ConsentRecord.CURRENT_VERSION }, ts
+            )
+            QrRenderer.render(raw).asImageBitmap()
+        }
+    }
+
+    fun selectTab(t: StudentQrTab) { _tab.value = t }
+
+    fun markApproved() {
+        settings.setStudentMarkedApproved(true)
+        _tab.value = StudentQrTab.ACCESS
+    }
+
+    fun setValidity(sec: Int) {
+        settings.setStudentQrValiditySec(sec)
+        _validity.value = settings.getStudentQrValiditySec()
+        if (accessJob?.isActive == true) startAccessQr()
+    }
+
+    /** Genera el QR de acceso y lo renueva solo al vencer. */
+    fun startAccessQr() {
         val mat = matricula ?: return
-        val s = student.value ?: return
-        if (!s.status.allowsAccess()) return
-        qrJob?.cancel()
-        qrJob = viewModelScope.launch {
-            val total = QrTokenManager.VALIDITY_SECONDS.toInt()
-            while (true) {
-                val image = QrRenderer.render(qrTokens.issue(mat)).asImageBitmap()
-                for (sec in total downTo 1) {
-                    _qr.value = QrUi(image, sec, total)
-                    delay(1_000)
+        val sg = signer ?: return
+        accessJob?.cancel()
+        accessJob = viewModelScope.launch {
+            while (isActive) {
+                val total = _validity.value
+                val now = System.currentTimeMillis()
+                val image = withContext(Dispatchers.Default) {
+                    QrRenderer.render(QrCrypto.accessQr(sg, mat, total, now)).asImageBitmap()
+                }
+                val expires = now / 1000 * 1000 + total * 1000L
+                while (isActive) {
+                    val left = ((expires - System.currentTimeMillis() + 999) / 1000).toInt()
+                    if (left <= 0) break
+                    _accessQr.value = QrUi(image, left, total)
+                    delay(250)
                 }
             }
         }
     }
 
-    fun hideQr() {
-        qrJob?.cancel()
-        _qr.value = null
+    fun stopAccessQr() {
+        accessJob?.cancel()
+        _accessQr.value = null
     }
 
     fun signOut() {
-        hideQr()
+        stopAccessQr()
         settings.setRememberedStudent(null)
     }
 }
@@ -164,15 +233,28 @@ fun StudentHomeScreen(
         return
     }
     val student by vm.student.collectAsStateWithLifecycle()
-    val samples by vm.samples.collectAsStateWithLifecycle()
-    val qr by vm.qr.collectAsStateWithLifecycle()
+    val hasKey by vm.hasKey.collectAsStateWithLifecycle()
+    val tab by vm.tab.collectAsStateWithLifecycle()
+    val validity by vm.validity.collectAsStateWithLifecycle()
+    val regQr by vm.registrationQr.collectAsStateWithLifecycle()
+    val accessQr by vm.accessQr.collectAsStateWithLifecycle()
+    // El QR de acceso solo se genera mientras la pestaña está visible.
+    DisposableEffect(tab, hasKey) {
+        if (tab == StudentQrTab.ACCESS && hasKey) vm.startAccessQr() else vm.stopAccessQr()
+        onDispose { vm.stopAccessQr() }
+    }
+    MaxBrightnessEffect(enabled = hasKey && (accessQr != null || regQr != null))
     StudentHomeContent(
         matricula = vm.matricula,
         student = student,
-        sampleCount = samples,
-        qr = qr,
-        onShowQr = vm::showQr,
-        onHideQr = vm::hideQr,
+        hasKey = hasKey,
+        tab = tab,
+        registrationQr = regQr,
+        accessQr = accessQr,
+        validitySec = validity,
+        onTab = vm::selectTab,
+        onMarkApproved = vm::markApproved,
+        onValidity = vm::setValidity,
         onBack = onBack,
         onReRegister = onReRegister,
         onDeleteData = { onDeleteData(vm.matricula) },
@@ -184,10 +266,14 @@ fun StudentHomeScreen(
 fun StudentHomeContent(
     matricula: String,
     student: Student?,
-    sampleCount: Int,
-    qr: QrUi?,
-    onShowQr: () -> Unit,
-    onHideQr: () -> Unit,
+    hasKey: Boolean,
+    tab: StudentQrTab,
+    registrationQr: ImageBitmap?,
+    accessQr: QrUi?,
+    validitySec: Int,
+    onTab: (StudentQrTab) -> Unit,
+    onMarkApproved: () -> Unit,
+    onValidity: (Int) -> Unit,
     onBack: () -> Unit,
     onReRegister: () -> Unit,
     onDeleteData: () -> Unit,
@@ -213,19 +299,19 @@ fun StudentHomeContent(
             val name = student?.nombre ?: matricula
             ProfileHeader(name, matricula, student)
             Spacer(Modifier.height(Spacing.lg))
+            val qrCard: @Composable (Modifier) -> Unit = { m ->
+                if (!hasKey) MissingKeyCard(onReRegister, m)
+                else QrCard(student, tab, registrationQr, accessQr, validitySec, onTab, onMarkApproved, onValidity, m)
+            }
             if (compact) {
                 Column(Modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                    StatusCard(student, sampleCount, onReRegister)
-                    QrCard(student, qr, onShowQr, onHideQr)
-                    DetailsCard(student, sampleCount, onReRegister, onDeleteData)
+                    qrCard(Modifier)
+                    DetailsCard(student, onReRegister, onDeleteData)
                 }
             } else {
                 Row(Modifier.widthIn(max = 1100.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.xl)) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                        StatusCard(student, sampleCount, onReRegister)
-                        DetailsCard(student, sampleCount, onReRegister, onDeleteData)
-                    }
-                    QrCard(student, qr, onShowQr, onHideQr, Modifier.weight(1f))
+                    qrCard(Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) { DetailsCard(student, onReRegister, onDeleteData) }
                 }
             }
             Spacer(Modifier.height(Spacing.xxl))
@@ -234,7 +320,7 @@ fun StudentHomeContent(
     if (confirmSignOut) {
         ConfirmDialog(
             title = "¿Salir de este dispositivo?",
-            message = "Se olvidará tu matrícula en este equipo. Tu registro y tus datos no se eliminan.",
+            message = "Dejarás de ver tu QR en esta pantalla. Tu registro y tu llave se conservan; vuelve con «Ya tengo registro».",
             confirmText = "Salir",
             onConfirm = { confirmSignOut = false; onSignOut() },
             onDismiss = { confirmSignOut = false },
@@ -256,136 +342,187 @@ private fun ProfileHeader(name: String, matricula: String, student: Student?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        if (student != null) StudentStatusChip(student.status)
     }
 }
 
 @Composable
-private fun StatusCard(student: Student?, sampleCount: Int, onReRegister: () -> Unit) {
-    val status = student?.status
-    val (title, body) = when {
-        student == null -> "Sin registro" to "No encontramos tu registro en este dispositivo."
-        sampleCount == 0 && status != null && status != StudentStatus.PENDING ->
-            "Falta tu registro facial" to "Estás en el directorio institucional, pero aún no registras tu rostro."
-        status == StudentStatus.PENDING -> "Pendiente de aprobación" to "Seguridad revisará tu registro en breve. Te recomendamos acudir a la caseta si es urgente."
-        status == StudentStatus.APPROVED || status == StudentStatus.ACTIVO -> "¡Listo para entrar!" to "El kiosco te reconocerá al mirar la cámara. Ten tu QR a la mano como respaldo."
-        status == StudentStatus.REJECTED -> "Registro rechazado" to "Acude con el personal de seguridad para revisar tu caso o vuelve a registrarte."
-        else -> "Acceso bloqueado (${status?.labelEs()})" to "Tu estatus institucional no permite el acceso. Acude a Servicios Escolares."
-    }
-    val ready = status?.allowsAccess() == true && sampleCount > 0
-    AppCard(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (ready) SuccessIllustration(Modifier.size(84.dp)) else PendingIllustration(Modifier.size(84.dp))
-            Spacer(Modifier.width(Spacing.lg))
-            Column(Modifier.weight(1f)) {
-                Text("Estatus de acceso", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(Spacing.xs))
-                Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        if (sampleCount == 0 || status == StudentStatus.REJECTED) {
-            Spacer(Modifier.height(Spacing.lg))
-            PrimaryButton("Registrar mi rostro", onClick = onReRegister, icon = Icons.Rounded.Face, modifier = Modifier.fillMaxWidth())
-        }
+private fun MissingKeyCard(onReRegister: () -> Unit, modifier: Modifier = Modifier) {
+    AppCard(modifier.fillMaxWidth()) {
+        AlertBanner(
+            title = "Este teléfono no tiene tu llave segura",
+            message = "Puede pasar si borraste los datos de la app o cambiaste de teléfono. Regístrate de nuevo y muestra tu nuevo QR de registro al guardia.",
+            tone = Tone.Warning,
+            icon = Icons.Rounded.Key
+        )
+        Spacer(Modifier.height(Spacing.lg))
+        PrimaryButton("Registrarme de nuevo", onClick = onReRegister, icon = Icons.Rounded.Refresh, modifier = Modifier.fillMaxWidth())
     }
 }
 
 @Composable
 fun QrCard(
     student: Student?,
-    qr: QrUi?,
-    onShowQr: () -> Unit,
-    onHideQr: () -> Unit,
+    tab: StudentQrTab,
+    registrationQr: ImageBitmap?,
+    accessQr: QrUi?,
+    validitySec: Int,
+    onTab: (StudentQrTab) -> Unit,
+    onMarkApproved: () -> Unit,
+    onValidity: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val eligible = student?.status?.allowsAccess() == true
-    AppCard(modifier.fillMaxWidth()) {
-        SectionHeader(
-            "Mi QR dinámico",
-            subtitle = "Respaldo si el reconocimiento facial falla · se renueva cada ${QrTokenManager.VALIDITY_SECONDS} s"
-        )
-        Spacer(Modifier.height(Spacing.lg))
-        AnimatedContent(
-            targetState = qr != null,
-            transitionSpec = { (fadeIn(tween(300)) + scaleIn(initialScale = 0.92f)) togetherWith fadeOut(tween(150)) },
-            label = "qr"
-        ) { showing ->
-            if (showing && qr != null) {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier.fillMaxWidth(0.82f).widthIn(max = 300.dp).aspectRatio(1f)
-                            .background(Color.White, MaterialTheme.shapes.large)
-                            .padding(Spacing.md)
-                    ) {
-                        Image(qr.image, contentDescription = "Código QR de acceso, vigente ${qr.secondsLeft} segundos", modifier = Modifier.fillMaxSize())
-                    }
-                    Spacer(Modifier.height(Spacing.lg))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CountdownRing(qr.secondsLeft, qr.totalSeconds, Modifier.size(52.dp))
-                        Spacer(Modifier.width(Spacing.md))
-                        Column {
-                            Text("Se renueva en ${qr.secondsLeft} s", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Muéstralo a la cámara del kiosco",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(Spacing.lg))
-                    SecondaryButton("Ocultar QR", onClick = onHideQr, modifier = Modifier.fillMaxWidth())
-                }
-            } else {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        Modifier.size(120.dp).background(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.shapes.large),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Rounded.QrCode2, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(72.dp))
-                    }
-                    Spacer(Modifier.height(Spacing.lg))
-                    if (!eligible) {
-                        Text(
-                            "Disponible cuando tu registro esté aprobado.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(Spacing.md))
-                    }
-                    PrimaryButton(
-                        "Mostrar mi QR", onClick = onShowQr, enabled = eligible,
-                        icon = Icons.Rounded.QrCode2, modifier = Modifier.fillMaxWidth()
-                    )
+    val blocked = student?.status == StudentStatus.BAJA || student?.status == StudentStatus.SUSPENDIDO
+    AppCard(modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+        TabRow(selectedTabIndex = tab.ordinal, containerColor = Color.Transparent) {
+            StudentQrTab.entries.forEach { t ->
+                Tab(selected = tab == t, onClick = { onTab(t) }, text = { Text(t.label, style = MaterialTheme.typography.titleSmall) })
+            }
+        }
+        Column(Modifier.padding(Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (blocked) {
+                AlertBanner(
+                    title = "Acceso bloqueado (${student?.status?.labelEs()})",
+                    message = "Tu estatus institucional no permite el acceso. Acude a Servicios Escolares.",
+                    tone = Tone.Danger,
+                    icon = Icons.Rounded.Warning,
+                    modifier = Modifier.padding(bottom = Spacing.lg)
+                )
+            }
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) },
+                label = "qrTab"
+            ) { t ->
+                when (t) {
+                    StudentQrTab.ACCESS -> AccessQrPane(accessQr, validitySec, onValidity)
+                    StudentQrTab.REGISTRATION -> RegistrationQrPane(student, registrationQr, onMarkApproved)
                 }
             }
         }
     }
 }
 
-/** Anillo de cuenta regresiva con el número de segundos al centro. */
 @Composable
-fun CountdownRing(seconds: Int, total: Int, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary, track: Color = MaterialTheme.colorScheme.surfaceContainerHighest, textColor: Color = MaterialTheme.colorScheme.onSurface) {
-    val ext = AppTheme.extended
-    val fraction by animateFloatAsState(seconds / total.toFloat(), tween(900), label = "ring")
-    val ringColor = if (seconds <= 5) ext.warning else color
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val sw = size.minDimension * 0.1f
-            drawArc(track, 0f, 360f, false, style = Stroke(sw), topLeft = androidx.compose.ui.geometry.Offset(sw / 2, sw / 2), size = androidx.compose.ui.geometry.Size(size.width - sw, size.height - sw))
-            drawArc(ringColor, -90f, 360f * fraction, false, style = Stroke(sw, cap = StrokeCap.Round), topLeft = androidx.compose.ui.geometry.Offset(sw / 2, sw / 2), size = androidx.compose.ui.geometry.Size(size.width - sw, size.height - sw))
-        }
-        Text("$seconds", style = MaterialTheme.typography.titleMedium, color = textColor)
+private fun QrImage(image: ImageBitmap?, description: String) {
+    Box(
+        Modifier.fillMaxWidth(0.86f).widthIn(max = 320.dp).aspectRatio(1f)
+            .background(Color.White, MaterialTheme.shapes.large)
+            .padding(Spacing.md)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) {
+        if (image != null) Image(image, contentDescription = null, modifier = Modifier.fillMaxSize())
+        else Icon(Icons.Rounded.QrCode2, contentDescription = null, tint = Color(0xFFCBD5E1), modifier = Modifier.size(96.dp))
     }
 }
 
 @Composable
-private fun DetailsCard(student: Student?, sampleCount: Int, onReRegister: () -> Unit, onDeleteData: () -> Unit) {
+private fun AccessQrPane(qr: QrUi?, validitySec: Int, onValidity: (Int) -> Unit) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        QrImage(qr?.image, "Código QR de acceso" + (qr?.let { ", vence en ${it.secondsLeft} segundos" } ?: ""))
+        Spacer(Modifier.height(Spacing.lg))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CountdownRing(qr?.secondsLeft ?: validitySec, qr?.totalSeconds ?: validitySec, Modifier.size(56.dp))
+            Spacer(Modifier.width(Spacing.md))
+            Column {
+                Text(
+                    if (qr == null) "Generando tu QR…" else "Se renueva en ${formatLeft(qr.secondsLeft)}",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    "Muéstralo al guardia o a la cámara del kiosco",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(Modifier.height(Spacing.lg))
+        HorizontalDivider(color = AppTheme.extended.cardBorder)
+        Spacer(Modifier.height(Spacing.md))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(Spacing.sm))
+            Text("Vigencia del QR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            SettingsRepository.STUDENT_QR_VALIDITY_OPTIONS.forEach { sec ->
+                FilterChip(
+                    selected = sec == validitySec,
+                    onClick = { onValidity(sec) },
+                    label = { Text(SettingsRepository.validityLabel(sec)) }
+                )
+            }
+        }
+        Text(
+            "Cada QR sirve una sola vez y deja de funcionar al vencer.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun RegistrationQrPane(student: Student?, image: ImageBitmap?, onMarkApproved: () -> Unit) {
+    val approvedHere = student?.status?.allowsAccess() == true
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        StatusPill(
+            if (approvedHere) "Acceso activo" else "Pendiente de activación",
+            if (approvedHere) Tone.Success else Tone.Warning,
+            icon = if (approvedHere) Icons.Rounded.CheckCircle else Icons.Rounded.HowToReg
+        )
+        Spacer(Modifier.height(Spacing.md))
+        QrImage(image, "Código QR de registro")
+        Spacer(Modifier.height(Spacing.lg))
+        Text(
+            if (approvedHere) "Tu acceso ya está activo." else "Pendiente: muéstrale este QR al guardia para activar tu acceso",
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(Spacing.xs))
+        Text(
+            "Solo se muestra una vez, en caseta. Contiene tus datos y tu llave pública; no permite entrar por sí solo.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        Spacer(Modifier.height(Spacing.lg))
+        PrimaryButton("Ya me aprobaron", onClick = onMarkApproved, icon = Icons.Rounded.QrCode2, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+private fun formatLeft(sec: Int): String = if (sec < 60) "$sec s" else "%d:%02d min".format(sec / 60, sec % 60)
+
+/** Anillo de cuenta regresiva con el tiempo restante al centro. */
+@Composable
+fun CountdownRing(seconds: Int, total: Int, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary, track: Color = MaterialTheme.colorScheme.surfaceContainerHighest, textColor: Color = MaterialTheme.colorScheme.onSurface) {
+    val ext = AppTheme.extended
+    val fraction by animateFloatAsState(seconds / total.coerceAtLeast(1).toFloat(), tween(900), label = "ring")
+    val ringColor = if (seconds <= 5) ext.warning else color
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val sw = size.minDimension * 0.1f
+            val tl = androidx.compose.ui.geometry.Offset(sw / 2, sw / 2)
+            val sz = androidx.compose.ui.geometry.Size(size.width - sw, size.height - sw)
+            drawArc(track, 0f, 360f, false, style = Stroke(sw), topLeft = tl, size = sz)
+            drawArc(ringColor, -90f, 360f * fraction, false, style = Stroke(sw, cap = StrokeCap.Round), topLeft = tl, size = sz)
+        }
+        Text(if (seconds >= 100) "${(seconds + 59) / 60}m" else "$seconds", style = MaterialTheme.typography.titleMedium, color = textColor)
+    }
+}
+
+@Composable
+private fun DetailsCard(student: Student?, onReRegister: () -> Unit, onDeleteData: () -> Unit) {
     AppCard(Modifier.fillMaxWidth()) {
-        SectionHeader("Mis datos", subtitle = "Solo se guardan vectores cifrados, nunca fotos")
+        SectionHeader("Mis datos", subtitle = "Solo datos personales · sin fotos ni biometría")
         Spacer(Modifier.height(Spacing.sm))
-        DetailRow("Registro facial", if (sampleCount > 0) "$sampleCount muestras cifradas" else "Sin muestras", icon = Icons.Rounded.EnhancedEncryption)
+        DetailRow("Matrícula", student?.matricula ?: "—", icon = Icons.Rounded.Badge)
+        HorizontalDivider(color = AppTheme.extended.cardBorder)
+        DetailRow("Carrera", student?.carrera?.ifBlank { "—" } ?: "—", icon = Icons.Rounded.School)
+        student?.correo?.let {
+            HorizontalDivider(color = AppTheme.extended.cardBorder)
+            DetailRow("Correo", it, icon = Icons.Rounded.Email)
+        }
         HorizontalDivider(color = AppTheme.extended.cardBorder)
         DetailRow(
             "Consentimiento",
@@ -393,22 +530,21 @@ private fun DetailsCard(student: Student?, sampleCount: Int, onReRegister: () ->
             icon = Icons.Rounded.Policy
         )
         HorizontalDivider(color = AppTheme.extended.cardBorder)
-        DetailRow("Carrera", student?.carrera?.ifBlank { "—" } ?: "—", icon = Icons.Rounded.School)
+        DetailRow("Llave segura", "Guardada en este teléfono", icon = Icons.Rounded.Key)
         student?.approvedAtMs?.let {
             HorizontalDivider(color = AppTheme.extended.cardBorder)
             DetailRow("Revisado", TimeUtil.formatShortDate(it), icon = Icons.Rounded.CalendarMonth)
         }
         Spacer(Modifier.height(Spacing.lg))
-        TonalButton("Actualizar registro facial", onClick = onReRegister, icon = Icons.Rounded.Refresh, modifier = Modifier.fillMaxWidth())
+        TonalButton("Actualizar mis datos", onClick = onReRegister, icon = Icons.Rounded.Refresh, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(Spacing.sm))
         SecondaryButton("Eliminar mis datos", onClick = onDeleteData, icon = Icons.Rounded.DeleteOutline, modifier = Modifier.fillMaxWidth())
-        if (student?.status == StudentStatus.PENDING) {
-            Spacer(Modifier.height(Spacing.md))
-            AlertBanner(
-                title = "Volver a registrarte reinicia la revisión",
-                tone = Tone.Info,
-                icon = Icons.Rounded.Refresh
-            )
-        }
+        Spacer(Modifier.height(Spacing.md))
+        AlertBanner(
+            title = "Actualizar tus datos crea una llave nueva",
+            message = "Tendrás que mostrar otra vez tu QR de registro al guardia.",
+            tone = Tone.Info,
+            icon = Icons.Rounded.Refresh
+        )
     }
 }

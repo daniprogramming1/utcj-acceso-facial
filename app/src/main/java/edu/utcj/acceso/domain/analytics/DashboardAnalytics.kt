@@ -10,7 +10,7 @@ data class DayCount(val dayStartMs: Long, val allowed: Int, val denied: Int) {
 }
 
 data class DashboardStats(
-    /** Accesos concedidos hoy (rostro, QR, huella o manual). */
+    /** Accesos concedidos hoy (QR o manual; incluye métodos históricos). */
     val entriesToday: Int = 0,
     val attemptsToday: Int = 0,
     val deniedToday: Int = 0,
@@ -105,7 +105,7 @@ object AlertsEngine {
                 val unknown = mat == "—" || mat.isBlank()
                 out += AccessAlert(
                     type = AlertType.CONSECUTIVE_FAILURES,
-                    title = if (unknown) "$streak rostros no reconocidos seguidos" else "$streak fallos seguidos",
+                    title = if (unknown) "$streak QR no reconocidos seguidos" else "$streak fallos seguidos",
                     message = if (unknown) "Revisa el kiosco: varias personas no registradas intentaron entrar."
                     else "${sorted.first().nombre} ($mat) acumula $streak intentos denegados.",
                     matricula = mat.takeUnless { unknown },
