@@ -24,12 +24,17 @@ import edu.utcj.acceso.data.local.AccessEventDao
 import edu.utcj.acceso.data.local.AccessEventEntity
 import edu.utcj.acceso.data.local.StudentDao
 import edu.utcj.acceso.data.local.StudentEntity
+import edu.utcj.acceso.data.qr.ExternalQrInput
 import edu.utcj.acceso.data.repository.AuthRepository
 import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.data.security.KeyValueStore
 import edu.utcj.acceso.domain.model.AccessMethod
 import edu.utcj.acceso.domain.model.AccessResult
 import edu.utcj.acceso.domain.model.StudentStatus
+import edu.utcj.acceso.domain.qr.QrCrypto
+import edu.utcj.acceso.domain.qr.SoftwareQrSigner
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -59,6 +64,7 @@ class GuardFlowTest {
     @Inject lateinit var auth: AuthRepository
     @Inject lateinit var events: AccessEventDao
     @Inject lateinit var students: StudentDao
+    @Inject lateinit var qrInput: ExternalQrInput
 
     private var scenario: ActivityScenario<MainActivity>? = null
 
@@ -136,7 +142,7 @@ class GuardFlowTest {
         drawFrames()
 
         for ((nav, marker) in listOf(
-            "Alumnos" to "Alumnos",
+            "Escanear" to "Escanear QR",
             "Aprobar" to "Aprobaciones",
             "Bitácora" to "Bitácora",
             "Más" to "Más opciones"
@@ -146,7 +152,7 @@ class GuardFlowTest {
             compose.waitForIdle()
             drawFrames(frames = 10)
         }
-        for (item in listOf("Visitantes", "Incidencias", "Configuración")) {
+        for (item in listOf("Alumnos", "Visitantes", "Incidencias", "Configuración")) {
             compose.onNodeWithText("Más").performClick()
             compose.waitForText("Más opciones")
             compose.onNodeWithText(item).performClick()
@@ -190,7 +196,7 @@ class GuardFlowTest {
                     AccessEventEntity(
                         datetimeMs = now - i * 60_000L, matricula = "20230001", nombre = "Luis Pérez",
                         result = if (i == 0) AccessResult.ALLOWED else AccessResult.DENIED,
-                        method = AccessMethod.FACE, similarity = 0.7f, verifyDurationMs = 900, syncKey = "k$i"
+                        method = AccessMethod.QR, verifyDurationMs = 120, syncKey = "k$i"
                     )
                 )
             }
@@ -216,11 +222,74 @@ class GuardFlowTest {
         compose.onNode(hasText("Entrar al panel") and hasClickAction()).performClick()
         compose.waitForText("Sin actividad")
         drawFrames()
-        for (item in listOf("Alumnos", "Aprobaciones", "Bitácora", "Visitantes", "Incidencias", "Configuración", "Inicio")) {
+        for (item in listOf("Escanear QR", "Alumnos", "Aprobaciones", "Bitácora", "Visitantes", "Incidencias", "Configuración", "Inicio")) {
             compose.onNode(hasText(item) and hasClickAction()).performClick()
             compose.waitForIdle()
             drawFrames(frames = 10)
         }
         compose.waitForText("Accesos por hora")
+    }
+
+    private fun login() {
+        auth.setupPassword("Seguro#2026".toCharArray(), "Guardia Norte")
+        launch()
+        openGuard()
+        compose.waitForText("Acceso de seguridad")
+        type("Contraseña", "Seguro#2026")
+        compose.onNode(hasText("Entrar al panel") and hasClickAction()).performClick()
+        compose.waitForText("Actividad reciente")
+    }
+
+    /**
+     * Flujo completo con dos «teléfonos»: el alumno genera su QR de registro (llave EC en
+     * software), el guardia lo escanea desde Aprobaciones y lo aprueba; luego escanea un QR de
+     * acceso firmado y ve la tarjeta del alumno con «Acceso permitido».
+     */
+    @Test
+    fun guard_approvesRegistrationQr_thenScansAccessQr_showsStudentCard() {
+        val phone = SoftwareQrSigner.generate()
+        val now = System.currentTimeMillis()
+        // Horario que incluye la hora actual, para que la prueba pase a cualquier hora.
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        SettingsRepository(store).setHours(hour, (hour + 2) % 24)
+        val registration = QrCrypto.registrationQr(phone, "20249999", "Ana López Núñez", "TI · 5A", "ana@utcj.edu.mx", "2.0.0", now)
+        login()
+
+        compose.onNode(hasText("Aprobar") and hasClickAction()).performClick()
+        compose.waitForText("Escanear QR")
+        compose.onNodeWithText("Escanea el QR de registro del alumno para ver sus datos y aprobarlo.").performClick()
+        compose.waitForText("Acceso y registro de alumnos")
+        drawFrames(frames = 5)
+
+        qrInput.submit(registration)
+        compose.waitForText("QR de registro")
+        compose.waitForText("Ana López Núñez")
+        clickButton("Aprobar acceso")
+        compose.waitForText("Ana López Núñez ya puede entrar con su QR")
+        val saved = runBlocking { students.getByMatricula("20249999") }
+        assertNotNull(saved)
+        assertEquals(StudentStatus.APPROVED, saved!!.status)
+        assertNotNull(saved.publicKey)
+
+        qrInput.submit(QrCrypto.accessQr(phone, "20249999", 60, System.currentTimeMillis()))
+        compose.waitForText("Acceso permitido")
+        compose.waitForText("Matrícula 20249999")
+        drawFrames(frames = 5)
+        clickButton("Registrar entrada")
+        compose.waitForText("Entrada registrada: Ana López Núñez")
+        val logged = runBlocking { events.getSince(0) }
+        check(logged.any { it.matricula == "20249999" && it.result == AccessResult.ALLOWED && it.method == AccessMethod.QR }) {
+            "La entrada no quedó en la bitácora: $logged"
+        }
+
+        // Un QR vencido del mismo alumno se rechaza con el motivo.
+        qrInput.submit(QrCrypto.accessQr(phone, "20249999", 30, System.currentTimeMillis() - 5 * 60_000))
+        compose.waitForText("QR vencido")
+        compose.waitForText("Acceso denegado")
+    }
+
+    private fun clickButton(text: String) {
+        compose.waitForText(text)
+        compose.onNode(hasText(text) and hasClickAction()).performClick()
     }
 }

@@ -1,18 +1,26 @@
-# Acceso UTCJ — Control de acceso facial para campus
+# Acceso UTCJ — Control de acceso con QR firmado para campus
 
-App Android nativa para verificar el acceso de alumnos a la **Universidad Tecnológica de Ciudad Juárez (UTCJ)** mediante reconocimiento facial en el dispositivo, con respaldos por huella y QR dinámico, bitácora auditable y un panel administrativo adaptable a teléfono, tableta y kiosco.
+App Android nativa para controlar el acceso de alumnos a la **Universidad Tecnológica de Ciudad Juárez (UTCJ)** con un **QR temporal firmado** que genera el teléfono del alumno y escanea el guardia (o la cámara del kiosco). Incluye bitácora auditable, aprobación por el guardia, funcionamiento sin conexión y un panel administrativo adaptable a teléfono, tableta y kiosco.
 
-> Motor facial preferido: **MobileFaceNet (TFLite)**; si el modelo no está en assets, se usa un histograma legado (ver **Limitaciones** y `scripts/download_mobilefacenet.sh`). La marca es configurable (*white-label*): ver [Cambiar la marca](#cambiar-la-marca-white-label).
+> Desde la **v1.2.0** ya no hay reconocimiento facial ni huella: no se capturan rostros ni biometría de ningún tipo. La marca es configurable (*white-label*): ver [Cambiar la marca](#cambiar-la-marca-white-label).
 
 ## Capturas de pantalla
 
 Generadas con Roborazzi (Robolectric, sin emulador) y datos ficticios — ver [TESTING.md](TESTING.md#4-capturas-de-pantalla-roborazzi).
 
-| Bienvenida | Selección de rol | Registro: captura facial | Mi acceso + QR dinámico |
+| Bienvenida | Selección de rol | Registro: datos | Registro: aviso de privacidad |
 |---|---|---|---|
-| ![](docs/screenshots/01-onboarding.png) | ![](docs/screenshots/02-seleccion-de-rol.png) | ![](docs/screenshots/03-registro-captura-facial.png) | ![](docs/screenshots/04-alumno-inicio-qr.png) |
+| ![](docs/screenshots/01-onboarding.png) | ![](docs/screenshots/02-seleccion-de-rol.png) | ![](docs/screenshots/03b-registro-datos.png) | ![](docs/screenshots/03-registro-consentimiento.png) |
 
-| Kiosco en espera (horizontal) | Acceso permitido | Acceso denegado |
+| Alumno: QR de acceso (cuenta regresiva) | Alumno: QR de registro (pendiente) | Guardia: escáner | Guardia: aprobar registro |
+|---|---|---|---|
+| ![](docs/screenshots/04-alumno-qr-acceso.png) | ![](docs/screenshots/04b-alumno-qr-registro.png) | ![](docs/screenshots/13-guardia-escaner.png) | ![](docs/screenshots/16-guardia-aprobar-registro.png) |
+
+| Guardia: acceso permitido | Guardia: acceso denegado |
+|---|---|
+| ![](docs/screenshots/14-guardia-acceso-permitido.png) | ![](docs/screenshots/15-guardia-acceso-denegado.png) |
+
+| Kiosco en espera (horizontal) | Kiosco: permitido | Kiosco: denegado |
 |---|---|---|
 | ![](docs/screenshots/05-kiosco-espera.png) | ![](docs/screenshots/06-kiosco-acceso-permitido.png) | ![](docs/screenshots/07-kiosco-acceso-denegado.png) |
 
@@ -28,27 +36,41 @@ Generadas con Roborazzi (Robolectric, sin emulador) y datos ficticios — ver [T
 |---|---|---|---|
 | ![](docs/screenshots/10-panel-alumnos.png) | ![](docs/screenshots/11-panel-bitacora.png) | ![](docs/screenshots/12-panel-configuracion.png) | ![](docs/screenshots/02b-seleccion-de-rol-oscuro.png) |
 
+## Cómo funciona
+
+**Alumno (su propio teléfono)**
+1. **Soy alumno** → Datos (nombre, matrícula, carrera/grupo, correo opcional) → Aviso de privacidad → *Acepto y generar mi QR*.
+2. El teléfono crea un par de llaves **EC P-256 en el Android Keystore** (la privada nunca sale del teléfono) y muestra su **QR de registro**: «Pendiente: muéstrale este QR al guardia para activar tu acceso».
+3. Una vez aprobado, en **Mi acceso → QR de acceso** aparece un QR firmado que **se renueva solo** con un anillo de cuenta regresiva (vigencia **1 min** por defecto; 30 s / 1 / 2 / 5 min). El brillo sube al máximo mientras se muestra.
+4. Lo muestra en caseta (al guardia o a la cámara del kiosco). Cada QR sirve **una sola vez**.
+
+**Guardia (otro teléfono o tableta)**
+1. Panel → **Aprobar** → *Escanear QR* (o pestaña **Escanear**) → escanea el QR de registro del alumno.
+2. Revisa la tarjeta (nombre, matrícula, carrera, correo, estatus institucional) y su credencial → **Aprobar acceso** / *Rechazar*. Si el CSV dice BAJA o SUSPENDIDO, no se puede aprobar.
+3. En la entrada: pestaña **Escanear** → escanea el QR de acceso → tarjeta del alumno con iniciales, nombre, matrícula, carrera, estatus, hora y **Acceso permitido** (verde) o **Acceso denegado** (rojo) con el motivo exacto.
+4. **Registrar entrada** (o *No permitir*). En **Modo kiosco** la cámara frontal escanea y registra sola. Todo escaneo queda en la bitácora (método QR, resultado, motivo, guardia).
+
 ## Características
 
 | Área | Qué hace |
 |---|---|
-| Diseño | Sistema de diseño propio (Material 3): tema claro/oscuro/sistema, tipografía Plus Jakarta Sans incluida (sin internet), tokens de espaciado y formas, componentes reutilizables (KPI, chips de estatus, estados vacíos ilustrados, *skeletons*, diálogos de confirmación), movimiento reducido respetado, textos 100 % en español |
+| Diseño | Sistema de diseño propio (Material 3): tema claro/oscuro/sistema, Plus Jakarta Sans incluida (sin internet), componentes reutilizables, movimiento reducido respetado, textos 100 % en español |
 | Primer uso | *Splash* de Android 12+, 3 páginas de bienvenida y selección de rol con tarjetas ilustradas |
-| Alumno | Asistente por pasos **Datos → Consentimiento → Captura facial → Listo** con óvalo guía, anillo de progreso, chips de guía («Acércate», «Mejora la iluminación»…), 3–5 muestras; pantalla **Mi acceso** con estatus, **QR dinámico** con anillo de cuenta regresiva y **Eliminar mis datos** |
-| Kiosco | Horizontal por defecto (configurable), inmersivo y siempre encendido; reloj, fecha, marca y estado de conexión; estado de espera «Acércate a la cámara»; resultado a pantalla completa verde/rojo con animación, nombre, matrícula, iniciales, hora y motivo; alternativas **Huella / QR / Llamar al guardia** (crea una incidencia); regreso automático configurable (10 s por defecto); vibración y tono opcional |
-| Guardia | Contraseña PBKDF2-HMAC-SHA256 (sal aleatoria, 120 000 iteraciones); bloqueo de 5 min tras 5 intentos con **cuenta regresiva visual**; medidor de fortaleza al crear/cambiar contraseña; salir del kiosco exige contraseña |
-| Panel administrativo | Navegación adaptable (barra inferior en teléfono, riel en tableta vertical, cajón permanente en tableta horizontal). **Inicio**: KPI (entradas hoy vs ayer, tasa de éxito, tiempo promedio, pendientes), gráficas animadas (accesos por hora, dona permitidos/denegados, tendencia de 7 días), actividad reciente y alertas (3+ fallos seguidos, fuera de horario). **Alumnos** con búsqueda sin acentos, filtros y hoja de detalle; **Aprobaciones** con contador; **Bitácora** con periodo (hoy / 7 / 30 días / personalizado), filtros, agrupación por día y exportación **CSV** y **PDF con marca**; **Visitantes**; **Incidencias**; **Configuración** agrupada |
-| Reconocimiento | Alineación por ojos, **MobileFaceNet TFLite** o histograma legado, similitud coseno, umbral configurable con explicación (**0.60** por defecto; aviso si se baja), prueba de vida opcional |
-| Privacidad | **Nunca se guardan fotos**: solo vectores cifrados AES-256-GCM (Android Keystore); consentimiento versionado; aprobación obligatoria; bitácora de solo lectura |
-| Sin conexión | Todo funciona sin red; indicador reactivo *En línea / Sin conexión / Sincronizando / Pendientes: N*; cola WorkManager sin duplicados |
-| Estatus institucional | CSV (muestra en `assets/` + importación); BAJA/SUSPENDIDO = sin acceso, y volver a registrarse **no** restablece ese estatus |
+| Alumno | Asistente **Datos → Aviso de privacidad → Listo**; **Mi acceso** con pestañas *QR de acceso* (cuenta regresiva, vigencia elegible, brillo máximo) y *QR de registro*; **Eliminar mis datos** (borra también la llave del Keystore) |
+| QR firmado | `UTCJA1.matrícula.emitido.expira.nonce.firma` con **ECDSA P-256 / SHA-256**; el guardia verifica firma con la llave pública guardada al aprobar, vigencia (±30 s de tolerancia de reloj), vigencia máxima, **nonce de un solo uso**, estatus y horario — todo **sin conexión** |
+| Kiosco | Horizontal por defecto, inmersivo y siempre encendido; cámara frontal con recuadro y línea animada; resultado a pantalla completa verde/rojo con nombre, matrícula, iniciales, hora y motivo; **Llamar al guardia** (crea una incidencia); regreso automático (10 s por defecto) |
+| Guardia | Contraseña PBKDF2-HMAC-SHA256 (sal aleatoria, 120 000 iteraciones); bloqueo de 5 min tras 5 intentos con cuenta regresiva; salir del kiosco exige contraseña; **Entrada manual** con motivo como respaldo |
+| Panel administrativo | Navegación adaptable (barra inferior *Inicio · Escanear · Aprobar · Bitácora · Más*, riel o cajón en tableta). Tablero con KPI y gráficas, **Escanear QR**, **Aprobaciones**, **Alumnos** («QR registrado» / «Sin QR»), **Bitácora** (CSV y PDF), **Visitantes**, **Incidencias**, **Configuración** (vigencia máxima del QR, horario, kiosco, CSV, tema) |
+| Privacidad | Sin fotos ni biometría; solo datos personales y una llave **pública**; consentimiento versionado (2.0.0); aprobación obligatoria; bitácora de solo lectura |
+| Sin conexión | Todo funciona sin red; indicador *En línea / Sin conexión / Sincronizando / Pendientes: N*; cola WorkManager sin duplicados |
+| Estatus institucional | CSV (muestra en `assets/` + importación); BAJA/SUSPENDIDO = sin acceso ni aprobación, y volver a registrarse **no** restablece ese estatus |
 
 ## Requisitos
 
 - Android Studio Hedgehog (2023.1.1) o más reciente
 - JDK 17
 - Android SDK 34
-- Dispositivo físico con cámara frontal (recomendado; el emulador sirve para la UI, no para el reconocimiento)
+- Para el flujo completo: **dos teléfonos** (alumno y guardia) o un teléfono + tableta de kiosco, con cámara
 - minSdk 26 (Android 8.0)
 
 ## Compilar y ejecutar
@@ -57,26 +79,22 @@ Generadas con Roborazzi (Robolectric, sin emulador) y datos ficticios — ver [T
 git clone https://github.com/daniprogramming1/utcj-acceso-facial.git
 cd utcj-acceso-facial
 cp local.properties.example local.properties   # ajusta sdk.dir (Android Studio lo crea solo)
-./scripts/download_mobilefacenet.sh            # opcional pero recomendado: modelo TFLite
 ./gradlew assembleDebug                        # APK en app/build/outputs/apk/debug/
 ./gradlew installDebug                         # instala en el dispositivo conectado
 ./gradlew testDebugUnitTest                    # pruebas unitarias + render de capturas
 ./gradlew recordRoborazziDebug                 # regenera docs/screenshots/*.png
 ```
 
-### Modelo MobileFaceNet
-
-El binario `.tflite` **no** se incluye en el repositorio. Ejecuta `./scripts/download_mobilefacenet.sh` para colocarlo en `app/src/main/assets/models/mobilefacenet.tflite`. Sin él, la app usa el motor legado y lo indica en Logcat. Tras cambiar de modelo, **los alumnos deben volver a registrarse**.
-
-O ábrelo en Android Studio → *Open* → selecciona la carpeta → espera el **Gradle Sync** (descarga las nuevas dependencias) → *Run ▶*.
+O ábrelo en Android Studio → *Open* → selecciona la carpeta → espera el **Gradle Sync** → *Run ▶*.
 
 ### Primer uso
-1. Abre la app → recorre la bienvenida (o *Omitir*) → **Personal de seguridad** → define el nombre de la caseta y la contraseña (mínimo 6 caracteres).
-2. El CSV de muestra (`app/src/main/assets/students_status.csv`) se importa automáticamente la primera vez.
-3. En otro teléfono (o tras cerrar sesión): **Soy alumno** → Datos → Consentimiento → la app pide permiso de **cámara** → Captura facial.
-4. Panel → **Aprobaciones** (el ícono muestra el número pendiente) → *Aprobar*.
-5. Panel → **Modo kiosco** → el alumno se coloca frente a la cámara.
-6. El alumno puede ver su estatus y su QR en **Soy alumno** (la app recuerda su matrícula) o en «¿Ya te registraste? Consulta tu estatus y QR».
+1. **Teléfono del guardia**: bienvenida (o *Omitir*) → **Personal de seguridad** → nombre de la caseta y contraseña (mínimo 6 caracteres). El CSV de muestra (`app/src/main/assets/students_status.csv`) se importa automáticamente.
+2. **Teléfono del alumno**: **Soy alumno** → Datos → Aviso de privacidad → aparece el QR de registro.
+3. Guardia: Panel → **Aprobar** → *Escanear QR* → escanea el QR de registro → **Aprobar acceso**.
+4. Alumno: *Ya me aprobaron* → **QR de acceso**. Guardia: pestaña **Escanear** (o **Modo kiosco**) → escanea → tarjeta del alumno → **Registrar entrada**.
+
+### Actualizar desde la v1.1.x
+No hace falta desinstalar: la base de datos migra sola (v1 → v2) conservando alumnos, bitácora, visitantes e incidencias, y se eliminan las plantillas faciales. Los alumnos ya registrados aparecen como **«Sin QR»**: deben abrir *Soy alumno* en su teléfono, volver a registrarse y mostrar su QR de registro al guardia para ligar su llave.
 
 ## Firebase (opcional)
 
@@ -95,27 +113,27 @@ Mientras Firebase esté desactivado, el worker marca los eventos como sincroniza
 ```
 app/src/main/java/edu/utcj/acceso/
   AccesoApp.kt, MainActivity.kt
-  di/            Hilt: AppModule, DatabaseModule, SecurityModule
-  data/local     Room: entidades, DAOs, AppDatabase, Converters
-  data/remote    FirestoreDataSource, StudentStatusCsvDataSource
-  data/repository Student, AccessLog, Auth, Sync, Settings, Visitor, Incident
-  data/biometric FaceEmbeddingEngine (interfaz), MobileFaceNetEmbeddingEngine, LegacyHistogramEmbeddingEngine,
-                 FaceAlignment, FaceQualityChecker, FaceMatcher, LivenessChecker, EmbeddingCrypto, QrTokenManager
-  data/security  PasswordHasher, GuardAuthManager, SecurePrefs, KeyValueStore
-  data/sync      SyncWorker, SyncQueue
-  domain/model   Student, AccessEvent, Visitor, Incident, ConsentRecord, GuardSession
-  brand/         BrandConfig (nombre, institución, colores, logo, soporte)
-  domain/analytics DashboardCalculator, AlertsEngine (lógica pura, probada en JVM)
+  di/              Hilt: AppModule, DatabaseModule, SecurityModule, QrModule
+  domain/qr        QrCodec (formato), QrCrypto (firma/verificación ECDSA), AccessDecision (reglas del guardia)
+  data/qr          AndroidKeystoreQrKeyStore (llave del alumno), QrAccessService (verificación + nonces + bitácora)
+  data/local       Room: entidades, DAOs (incl. UsedNonceDao), AppDatabase + migraciones, Converters
+  data/remote      FirestoreDataSource, StudentStatusCsvDataSource
+  data/repository  Student, AccessLog, Auth, Sync, Settings, Visitor, Incident
+  data/security    PasswordHasher, GuardAuthManager, SecurePrefs, KeyValueStore
+  data/sync        SyncWorker, SyncQueue
+  domain/model     Student, AccessEvent, Visitor, Incident, ConsentRecord, GuardSession
+  domain/analytics DashboardCalculator, AlertsEngine
   domain/validation RegistrationValidator
-  data/export    PdfReportBuilder (reporte PDF con marca)
-  ui/theme       Color, Type (Plus Jakarta Sans), Shape, Spacing, Motion, Theme (claro/oscuro)
-  ui/components  TopBar, Buttons, Cards (KPI), Labels (chips), Feedback (vacíos, skeleton, diálogos),
-                 Inputs, ListItems, Charts (Canvas), FaceGuide, Illustrations, CameraPreview
-  ui/            onboarding, role, student, guard, kiosk, admin (AdminShell + secciones), navigation
-  util/          WindowSizeClass, TimeUtil, Initials, AppResult
+  data/export      PdfReportBuilder (reporte PDF con marca)
+  brand/           BrandConfig
+  ui/theme         Color, Type, Shape, Spacing, Motion, Theme
+  ui/components    Botones, tarjetas, chips, gráficas, QrScanner (CameraX + ML Kit), Illustrations…
+  ui/scan          Escáner del panel: ScanViewModel, ScanSection, tarjetas de alumno/registro
+  ui/              onboarding, role, student, guard, kiosk, admin (AdminShell + secciones), navigation
+  util/            WindowSizeClass, TimeUtil, ScreenBrightness, Initials, AppResult
 ```
 
-Más detalles en [ARCHITECTURE.md](ARCHITECTURE.md). Guía de pruebas en [TESTING.md](TESTING.md).
+Más detalles en [ARCHITECTURE.md](ARCHITECTURE.md). Guía de pruebas (incluido el plan con dos teléfonos) en [TESTING.md](TESTING.md).
 
 ## Cambiar la marca (white-label)
 
@@ -133,19 +151,19 @@ Todo lo visible de la marca vive en un solo lugar:
 
 ## Limitaciones conocidas
 
-- **Embeddings faciales**: con `mobilefacenet.tflite` en assets se usa MobileFaceNet (TFLite, ~192-d). Sin el archivo (o con «motor legado» en Configuración) se usa histograma 16×16 + geometría ML Kit (268-d). Ambos se L2-normalizan y se comparan por coseno; **no mezcles** vectores de distintos motores — hay que **volver a registrar** a los alumnos tras el cambio. Umbral por defecto **0.60** (MobileFaceNet); legado ~**0.72**.
-- **Huella**: BiometricPrompt valida una huella enrolada **en el dispositivo**, no identifica a un alumno concreto; se registra como respaldo con el guardia en turno.
-- **QR dinámico**: el secreto HMAC es local al dispositivo; el QR se valida en el mismo kiosco o en dispositivos que compartan el secreto. Además, quien conozca una matrícula **aprobada** puede abrir «Mi acceso» en ese dispositivo y generar su QR (no hay autenticación del alumno). Para producción: QR emitido por servidor o ligado a una sesión del alumno.
-- **Inicio del alumno**: la app recuerda solo la matrícula (sin biometría) para mostrar estatus/QR; «Salir» o «Eliminar mis datos» la olvidan.
-- **Cambios de comportamiento en este rediseño**: el kiosco regresa a la cámara a los **10 s** (antes 30 s; configurable 5/10/15/30 s), arranca en **horizontal** (configurable) y el resultado ya no es una pantalla aparte sino una capa sobre el kiosco. La app ahora **solicita el permiso de cámara** en tiempo de ejecución (antes no lo pedía).
+- **Llave por teléfono**: la llave privada vive en el Keystore del teléfono del alumno y no se puede exportar. Si cambia de teléfono, borra datos o desinstala, debe registrarse de nuevo y mostrar el nuevo QR de registro al guardia (la aprobación reemplaza la llave anterior).
+- **Aprobación local**: cada teléfono del guardia/kiosco guarda sus propias aprobaciones, llaves públicas y nonces usados (sin servidor). Con varias casetas, el alumno debe aprobarse en cada dispositivo (o sincronizar `students` por Firestore, pendiente).
+- **El teléfono del alumno no sabe cuándo lo aprueban**: por eso hay un botón *Ya me aprobaron*; el QR de acceso siempre se puede generar y es el guardia quien decide.
+- **Relojes**: la vigencia depende de la hora de ambos teléfonos; se toleran ±30 s. Un teléfono con la hora muy desfasada verá «QR vencido» o «Hora del QR inválida».
+- **Capturas de pantalla**: un QR copiado sirve hasta que vence o se usa una vez en ese dispositivo; por eso la vigencia es corta y el guardia puede limitar la máxima (5 min por defecto).
 - La app no reemplaza un control de acceso físico certificado.
 
 ## Privacidad
 
-- No se guardan fotografías: los frames de cámara existen solo en memoria.
-- Los embeddings se cifran con AES-256-GCM usando una clave no exportable del Android Keystore.
+- No se capturan rostros, fotos ni huellas; la cámara solo lee códigos QR y los cuadros existen solo en memoria.
+- El guardia guarda: nombre, matrícula, carrera, correo (opcional), versión del consentimiento y la **llave pública** del alumno.
 - Respaldo en la nube (`allowBackup`) desactivado; preferencias y base de datos excluidas de backup/transferencia.
-- «Eliminar mis datos» borra el registro del alumno y todos sus embeddings (la bitácora se conserva por seguridad institucional).
+- «Eliminar mis datos» borra el registro del alumno y su llave del Keystore (la bitácora se conserva por seguridad institucional).
 - Volver a registrarse no reinicia un estatus BAJA/SUSPENDIDO a PENDIENTE.
 
 ## Licencias de terceros

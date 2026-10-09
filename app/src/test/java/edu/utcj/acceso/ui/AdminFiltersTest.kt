@@ -12,7 +12,7 @@ import edu.utcj.acceso.ui.admin.filterEvents
 import edu.utcj.acceso.ui.admin.filterStudents
 import edu.utcj.acceso.ui.admin.groupByDay
 import edu.utcj.acceso.ui.admin.normalizeSearch
-import edu.utcj.acceso.ui.admin.thresholdExplanation
+import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.util.TimeUtil
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -92,10 +92,9 @@ class AdminFiltersTest {
     }
 
     @Test
-    fun thresholdExplanationWarnsBelowDefault() {
-        assertTrue(thresholdExplanation(0.55f).startsWith("Permisivo"))
-        assertTrue(thresholdExplanation(0.60f).startsWith("Equilibrado"))
-        assertTrue(thresholdExplanation(0.75f).startsWith("Estricto"))
-        assertTrue(thresholdExplanation(0.9f).startsWith("Muy estricto"))
+    fun validityLabels() {
+        assertEquals("30 s", SettingsRepository.validityLabel(30))
+        assertEquals("1 min", SettingsRepository.validityLabel(60))
+        assertEquals("5 min", SettingsRepository.validityLabel(300))
     }
 }

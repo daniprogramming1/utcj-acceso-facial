@@ -31,7 +31,6 @@ import edu.utcj.acceso.ui.admin.StudentsContent
 import edu.utcj.acceso.ui.admin.StudentsUi
 import edu.utcj.acceso.ui.admin.filterStudents
 import edu.utcj.acceso.ui.components.CameraPlaceholder
-import edu.utcj.acceso.ui.components.FaceGuideStatus
 import edu.utcj.acceso.ui.guard.GuardLoginContent
 import edu.utcj.acceso.ui.guard.LoginUi
 import edu.utcj.acceso.ui.kiosk.KioskContent
@@ -44,6 +43,13 @@ import edu.utcj.acceso.ui.student.RegStep
 import edu.utcj.acceso.ui.student.RegistrationContent
 import edu.utcj.acceso.ui.student.RegistrationUi
 import edu.utcj.acceso.ui.student.StudentHomeContent
+import edu.utcj.acceso.ui.student.StudentQrTab
+import edu.utcj.acceso.ui.scan.PanelScanResult
+import edu.utcj.acceso.ui.scan.ScanCardModel
+import edu.utcj.acceso.ui.scan.ScanContent
+import edu.utcj.acceso.ui.scan.ScanUi
+import edu.utcj.acceso.domain.qr.DenialReason
+import edu.utcj.acceso.domain.qr.RegistrationPayload
 import edu.utcj.acceso.ui.theme.AccesoUtcjTheme
 import edu.utcj.acceso.util.AppWindowSize
 import org.junit.Rule
@@ -59,7 +65,7 @@ import org.robolectric.annotation.GraphicsMode
  * - `./gradlew testDebugUnitTest` solo renderiza (prueba de humo, no escribe PNG).
  * - `./gradlew recordRoborazziDebug` escribe los PNG en `docs/screenshots/`.
  *
- * Se usa movimiento reducido para que las animaciones infinitas (anillo de escaneo, shimmer)
+ * Se usa movimiento reducido para que las animaciones infinitas (línea de escaneo, shimmer)
  * no impidan que la UI quede en reposo.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -95,46 +101,65 @@ class ScreenshotTests {
     }
 
     @Test
-    fun s03_registrationCapture() = shot("03-registro-captura-facial") {
+    fun s03_registrationConsent() = shot("03-registro-consentimiento") {
         RegistrationContent(
             state = RegistrationUi(
-                step = RegStep.CAPTURE,
+                step = RegStep.CONSENT,
                 matricula = "20231045",
                 nombre = "Ana Sofía López",
-                carrera = "Ingeniería en Software",
-                consentAccepted = true,
-                samples = List(2) { FloatArray(4) },
-                guidance = "Acércate un poco más",
-                faceStatus = FaceGuideStatus.Adjust
+                carrera = "Ingeniería en Software · 5A",
+                consentAccepted = true
             ),
-            onMatricula = {}, onNombre = {}, onCarrera = {}, onConsent = {}, onNext = {}, onBack = {},
-            onRetake = {}, onGoHome = {}, onFinish = {}, onDeleteData = {},
-            cameraContent = { CameraPlaceholder() }
+            onMatricula = {}, onNombre = {}, onCarrera = {}, onCorreo = {}, onConsent = {}, onNext = {}, onBack = {},
+            onGoHome = {}, onFinish = {}, onDeleteData = {}
         )
     }
 
     @Test
     fun s03b_registrationData() = shot("03b-registro-datos") {
         RegistrationContent(
-            state = RegistrationUi(step = RegStep.DATA, matricula = "20231045", nombre = "Ana Sofía López", carrera = "Ingeniería en Software"),
-            onMatricula = {}, onNombre = {}, onCarrera = {}, onConsent = {}, onNext = {}, onBack = {},
-            onRetake = {}, onGoHome = {}, onFinish = {}, onDeleteData = {},
-            cameraContent = { CameraPlaceholder() }
+            state = RegistrationUi(
+                step = RegStep.DATA, matricula = "20231045", nombre = "Ana Sofía López",
+                carrera = "Ingeniería en Software · 5A", correo = "ana.lopez@utcj.edu.mx"
+            ),
+            onMatricula = {}, onNombre = {}, onCarrera = {}, onCorreo = {}, onConsent = {}, onNext = {}, onBack = {},
+            onGoHome = {}, onFinish = {}, onDeleteData = {}
+        )
+    }
+
+    private val ana = Student(
+        "20231045", "Ana Sofía López", "Ingeniería en Software · 5A", StudentStatus.PENDING,
+        consentVersion = "2.0.0", consentTimestampMs = TestTime.at(2026, 9, 1, 9),
+        createdAtMs = TestTime.at(2026, 9, 1, 9), correo = "ana.lopez@utcj.edu.mx", hasQrKey = true
+    )
+
+    @Test
+    fun s04_studentAccessQr() = shot("04-alumno-qr-acceso") {
+        StudentHomeContent(
+            matricula = "20231045",
+            student = ana,
+            hasKey = true,
+            tab = StudentQrTab.ACCESS,
+            registrationQr = null,
+            accessQr = QrUi(QrRenderer.render(DEMO_ACCESS_QR).asImageBitmap(), 42, 60),
+            validitySec = 60,
+            onTab = {}, onMarkApproved = {}, onValidity = {},
+            onBack = {}, onReRegister = {}, onDeleteData = {}, onSignOut = {}
         )
     }
 
     @Test
-    fun s04_studentHomeQr() = shot("04-alumno-inicio-qr") {
+    fun s04b_studentRegistrationQr() = shot("04b-alumno-qr-registro") {
         StudentHomeContent(
             matricula = "20231045",
-            student = Student(
-                "20231045", "Ana Sofía López", "Ingeniería en Software", StudentStatus.APPROVED,
-                consentVersion = "1.0", consentTimestampMs = TestTime.at(2026, 9, 1, 9),
-                createdAtMs = TestTime.at(2026, 9, 1, 9), approvedAtMs = TestTime.at(2026, 9, 2, 8), approvedByGuard = "Caseta Norte"
-            ),
-            sampleCount = 5,
-            qr = QrUi(QrRenderer.render("UTCJ1|20231045|1791480000|demo").asImageBitmap(), 18, 30),
-            onShowQr = {}, onHideQr = {}, onBack = {}, onReRegister = {}, onDeleteData = {}, onSignOut = {}
+            student = ana,
+            hasKey = true,
+            tab = StudentQrTab.REGISTRATION,
+            registrationQr = QrRenderer.render(DEMO_REGISTRATION_QR).asImageBitmap(),
+            accessQr = null,
+            validitySec = 60,
+            onTab = {}, onMarkApproved = {}, onValidity = {},
+            onBack = {}, onReRegister = {}, onDeleteData = {}, onSignOut = {}
         )
     }
 
@@ -146,7 +171,7 @@ class ScreenshotTests {
             nowMs = TestTime.at(2026, 10, 8, 7, 42),
             sync = SyncUiState(SyncStatusLabel.ONLINE, 0, "En línea"),
             secondsLeft = 10, totalSeconds = 10,
-            onFingerprint = {}, onQr = {}, onFace = {}, onCallGuard = {}, onDismissResult = {}, onExit = {},
+            onCallGuard = {}, onDismissResult = {}, onExit = {},
             cameraContent = { CameraPlaceholder() }
         )
     }
@@ -155,14 +180,11 @@ class ScreenshotTests {
     @Config(qualifiers = KIOSK)
     fun s06_kioskGranted() = shot("06-kiosco-acceso-permitido") {
         KioskContent(
-            state = KioskViewModel.Ui(
-                result = KioskViewModel.VerifyOutcome(true, "Ana Sofía López", "20231045", timeMs = TestTime.at(2026, 10, 8, 7, 42)),
-                faceStatus = FaceGuideStatus.Done
-            ),
+            state = KioskViewModel.Ui(result = allowedCard),
             nowMs = TestTime.at(2026, 10, 8, 7, 42),
             sync = SyncUiState(SyncStatusLabel.ONLINE, 0, "En línea"),
             secondsLeft = 7, totalSeconds = 10,
-            onFingerprint = {}, onQr = {}, onFace = {}, onCallGuard = {}, onDismissResult = {}, onExit = {},
+            onCallGuard = {}, onDismissResult = {}, onExit = {},
             cameraContent = { CameraPlaceholder() }
         )
     }
@@ -171,17 +193,11 @@ class ScreenshotTests {
     @Config(qualifiers = KIOSK)
     fun s07_kioskDenied() = shot("07-kiosco-acceso-denegado") {
         KioskContent(
-            state = KioskViewModel.Ui(
-                result = KioskViewModel.VerifyOutcome(
-                    false, "Luis Ramírez Torres", "20220311", reason = "Estatus BAJA",
-                    timeMs = TestTime.at(2026, 10, 8, 7, 44)
-                ),
-                faceStatus = FaceGuideStatus.Error
-            ),
+            state = KioskViewModel.Ui(result = deniedCard),
             nowMs = TestTime.at(2026, 10, 8, 7, 44),
             sync = SyncUiState(SyncStatusLabel.PENDING, 3, "Pendientes: 3"),
             secondsLeft = 9, totalSeconds = 10,
-            onFingerprint = {}, onQr = {}, onFace = {}, onCallGuard = {}, onDismissResult = {}, onExit = {},
+            onCallGuard = {}, onDismissResult = {}, onExit = {},
             cameraContent = { CameraPlaceholder() }
         )
     }
@@ -231,7 +247,6 @@ class ScreenshotTests {
                 ui = StudentsUi(
                     loading = false,
                     students = filterStudents(FakeData.students, "", StudentFilter.ALL),
-                    enrolled = FakeData.students.map { it.matricula }.toSet() - "20240077",
                     counts = StudentFilter.entries.associateWith { f -> FakeData.students.count { f.matches(it.status) } }
                 ),
                 onQuery = {}, onFilter = {}, onApprove = {}, onReject = {}, onDelete = {}, onManualEntry = {}
@@ -258,13 +273,71 @@ class ScreenshotTests {
     fun s12_settings() = shot("12-panel-configuracion") {
         AdminFrame(AdminSection.SETTINGS, AppWindowSize.Compact) {
             SettingsContent(
-                ui = SettingsUi(liveness = true),
+                ui = SettingsUi(maxQrValiditySec = 120),
                 sync = SyncUiState(SyncStatusLabel.ONLINE, 0, "En línea"),
                 onChange = {}, onImportCsv = {}, onLoadSample = {}, onSyncNow = {},
                 onChangePassword = {}, onLogout = {}, onEvalMode = {}, onKiosk = {}
             )
         }
     }
+
+    private val allowedCard = ScanCardModel(
+        allowed = true, nombre = "Ana Sofía López", matricula = "20231045",
+        carrera = "Ingeniería en Software · 5A", status = StudentStatus.APPROVED,
+        timeMs = TestTime.at(2026, 10, 8, 7, 42)
+    )
+    private val deniedCard = ScanCardModel(
+        allowed = false, nombre = "Luis Ramírez Torres", matricula = "20220311",
+        carrera = "Redes y Telecomunicaciones", status = StudentStatus.BAJA,
+        reasonTitle = DenialReason.BAJA.labelEs, reasonDetail = DenialReason.BAJA.detailEs,
+        timeMs = TestTime.at(2026, 10, 8, 7, 44)
+    )
+
+    private fun scan(ui: ScanUi): @Composable () -> Unit = {
+        AdminFrame(AdminSection.SCAN, AppWindowSize.Compact) {
+            ScanContent(
+                ui = ui, onRegisterEntry = {}, onDeny = {}, onApprove = {}, onReject = {}, onDismiss = {},
+                onManualEntry = {}, cameraContent = { CameraPlaceholder() }
+            )
+        }
+    }
+
+    @Test
+    fun s13_guardScanner() = shot("13-guardia-escaner", content = scan(ScanUi()))
+
+    @Test
+    fun s14_guardScanAllowed() = shot("14-guardia-acceso-permitido", content = scan(
+        ScanUi(result = PanelScanResult.Access(allowedCard, awaitingGuard = true))
+    ))
+
+    @Test
+    fun s15_guardScanDenied() = shot("15-guardia-acceso-denegado", content = scan(
+        ScanUi(
+            result = PanelScanResult.Access(
+                ScanCardModel(
+                    allowed = false, nombre = "María Fernanda Ruiz", matricula = "20240077",
+                    carrera = "Negocios Internacionales", status = StudentStatus.APPROVED,
+                    reasonTitle = DenialReason.EXPIRED.labelEs, reasonDetail = DenialReason.EXPIRED.detailEs,
+                    timeMs = TestTime.at(2026, 10, 8, 7, 51)
+                ),
+                awaitingGuard = false
+            )
+        )
+    ))
+
+    @Test
+    fun s16_guardApproveRegistration() = shot("16-guardia-aprobar-registro", content = scan(
+        ScanUi(
+            result = PanelScanResult.Registration(
+                payload = RegistrationPayload(
+                    "20241203", "Jorge Alberto Núñez", "Manufactura · 2B", "jorge.nunez@utcj.edu.mx",
+                    "2.0.0", ByteArray(91), TestTime.at(2026, 10, 8, 7, 30)
+                ),
+                kind = PanelScanResult.Registration.Kind.READY,
+                previousStatus = StudentStatus.ACTIVO
+            )
+        )
+    ))
 
     @Composable
     private fun AdminFrame(section: AdminSection, size: AppWindowSize, body: @Composable () -> Unit) {
@@ -297,6 +370,11 @@ class ScreenshotTests {
 }
 
 const val OUT = "../docs/screenshots"
+
+/** Textos fijos para que los QR de las capturas no cambien entre ejecuciones. */
+const val DEMO_ACCESS_QR = "UTCJA1.MjAyMzEwNDU.1791476520.1791476580.q0N2aW1wbGVub25jZQ.MEUCIQDdemoSignatureForScreenshotsOnly0000000000000000AiB"
+const val DEMO_REGISTRATION_QR = "UTCJR1.MjAyMzEwNDU.QW5hIFNvZsOtYSBMw7NwZXo.SW5nZW5pZXLDrWEgZW4gU29mdHdhcmU.YW5hLmxvcGV6QHV0Y2ouZWR1Lm14.Mi4wLjA." +
+    "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEdemoPublicKeyForScreenshotsOnly000000000000000000000000000000000000000000000000.1788274800.MEUCIQDdemo"
 const val PHONE = "w393dp-h852dp-port-xxhdpi"
 const val TABLET = "w1280dp-h800dp-land-xhdpi"
 const val KIOSK = "w1280dp-h800dp-land-xhdpi"
@@ -306,14 +384,14 @@ object FakeData {
     val NOW = TestTime.at(2026, 10, 8, 13, 20)
 
     val students = listOf(
-        Student("20231045", "Ana Sofía López", "Ingeniería en Software", StudentStatus.APPROVED),
-        Student("20230112", "Diego Hernández", "Mecatrónica", StudentStatus.APPROVED),
+        Student("20231045", "Ana Sofía López", "Ingeniería en Software", StudentStatus.APPROVED, hasQrKey = true),
+        Student("20230112", "Diego Hernández", "Mecatrónica", StudentStatus.APPROVED, hasQrKey = true),
         Student("20240077", "María Fernanda Ruiz", "Negocios Internacionales", StudentStatus.PENDING),
         Student("20220311", "Luis Ramírez Torres", "Redes y Telecomunicaciones", StudentStatus.BAJA),
-        Student("20230988", "Valeria Castillo", "Ingeniería en Software", StudentStatus.ACTIVO),
+        Student("20230988", "Valeria Castillo", "Ingeniería en Software", StudentStatus.ACTIVO, hasQrKey = true),
         Student("20241203", "Jorge Alberto Núñez", "Manufactura", StudentStatus.PENDING),
         Student("20210544", "Paola Gutiérrez", "Energías Renovables", StudentStatus.SUSPENDIDO),
-        Student("20230671", "Ricardo Salinas", "Mantenimiento Industrial", StudentStatus.APPROVED),
+        Student("20230671", "Ricardo Salinas", "Mantenimiento Industrial", StudentStatus.APPROVED, hasQrKey = true),
         Student("20231999", "Fernanda Ortiz", "Diseño Digital", StudentStatus.REJECTED)
     )
 
@@ -327,8 +405,8 @@ object FakeData {
             repeat(perDay[6 - d]) { i ->
                 val s = names[i % names.size]
                 val t = dayStart + (7 * 60 + (i * 9) % 600) * 60_000L
-                add(AccessEvent(id++, t, s.matricula, s.nombre, AccessResult.ALLOWED, AccessMethod.FACE, verifyDurationMs = 820))
-                if (i % 9 == 0) add(AccessEvent(id++, t + 30_000, "—", "Desconocido", AccessResult.DENIED, AccessMethod.FACE))
+                add(AccessEvent(id++, t, s.matricula, s.nombre, AccessResult.ALLOWED, AccessMethod.QR, verifyDurationMs = 120))
+                if (i % 9 == 0) add(AccessEvent(id++, t + 30_000, s.matricula, s.nombre, AccessResult.DENIED, AccessMethod.QR, reason = "QR vencido"))
             }
         }
         // Hoy: pico a las 7 y 13 h.
@@ -338,21 +416,20 @@ object FakeData {
             repeat(n) { i ->
                 val s = names[(h + i) % names.size]
                 val t = today + h * 3_600_000L + i * 150_000L
-                val method = when (i % 11) { 3 -> AccessMethod.QR; 7 -> AccessMethod.MANUAL; else -> AccessMethod.FACE }
-                val result = when (method) { AccessMethod.QR -> AccessResult.QR; AccessMethod.MANUAL -> AccessResult.MANUAL; else -> AccessResult.ALLOWED }
+                val method = if (i % 11 == 7) AccessMethod.MANUAL else AccessMethod.QR
+                val result = if (method == AccessMethod.MANUAL) AccessResult.MANUAL else AccessResult.ALLOWED
                 add(
                     AccessEvent(
                         id++, t, s.matricula, s.nombre, result, method,
-                        authorizingGuard = if (method == AccessMethod.MANUAL) "Carlos Méndez" else null,
+                        authorizingGuard = if (method == AccessMethod.MANUAL) "Carlos Méndez" else "Caseta Norte",
                         reason = if (method == AccessMethod.MANUAL) "Credencial física verificada" else null,
-                        similarity = if (method == AccessMethod.FACE) 0.78f else null,
-                        verifyDurationMs = if (method == AccessMethod.FACE) 640L + (i * 37) % 400 else null
+                        verifyDurationMs = if (method == AccessMethod.QR) 90L + (i * 37) % 120 else null
                     )
                 )
             }
         }
-        add(AccessEvent(id++, today + 7 * 3_600_000L + 600_000, "20220311", "Luis Ramírez Torres", AccessResult.DENIED, AccessMethod.FACE, reason = "Estatus BAJA"))
-        repeat(3) { add(AccessEvent(id++, today + 13 * 3_600_000L + 900_000 + it * 40_000L, "20210544", "Paola Gutiérrez", AccessResult.DENIED, AccessMethod.FACE, reason = "Estatus SUSPENDIDO")) }
-        add(AccessEvent(id++, today + 12 * 3_600_000L + 300_000, "20240077", "María Fernanda Ruiz", AccessResult.DENIED, AccessMethod.FACE, reason = "Pendiente de aprobación"))
+        add(AccessEvent(id++, today + 7 * 3_600_000L + 600_000, "20220311", "Luis Ramírez Torres", AccessResult.DENIED, AccessMethod.QR, reason = "Alumno dado de baja"))
+        repeat(3) { add(AccessEvent(id++, today + 13 * 3_600_000L + 900_000 + it * 40_000L, "20210544", "Paola Gutiérrez", AccessResult.DENIED, AccessMethod.QR, reason = "Alumno suspendido")) }
+        add(AccessEvent(id++, today + 12 * 3_600_000L + 300_000, "20240077", "María Fernanda Ruiz", AccessResult.DENIED, AccessMethod.QR, reason = "Pendiente de aprobación"))
     }
 }
