@@ -24,6 +24,7 @@ import edu.utcj.acceso.domain.model.ThemeMode
 import edu.utcj.acceso.ui.navigation.AccesoNavGraph
 import edu.utcj.acceso.ui.navigation.Routes
 import edu.utcj.acceso.ui.theme.AccesoUtcjTheme
+import edu.utcj.acceso.ui.theme.Motion
 import edu.utcj.acceso.util.LocalWindowSizeClass
 import javax.inject.Inject
 
@@ -34,10 +35,21 @@ class MainActivity : FragmentActivity() {
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        // Splash nativo (AndroidX): se muestra mientras arranca el proceso, sin Activity extra.
+        // Al salir, el logo se encoge y se desvanece sobre la pantalla Compose de bienvenida,
+        // que tiene el mismo fondo y logotipo.
+        installSplashScreen().setOnExitAnimationListener { provider ->
+            provider.view.animate()
+                .alpha(0f)
+                .scaleX(0.9f)
+                .scaleY(0.9f)
+                .setDuration(Motion.SHORT.toLong())
+                .withEndAction { provider.remove() }
+                .start()
+        }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val start = if (settings.isOnboardingDone()) Routes.ROLE_SELECT else Routes.ONBOARDING
+        val home = if (settings.isOnboardingDone()) Routes.ROLE_SELECT else Routes.ONBOARDING
         setContent {
             val themeMode by settings.themeModeFlow.collectAsStateWithLifecycle()
             val dark = when (themeMode) {
@@ -58,7 +70,7 @@ class MainActivity : FragmentActivity() {
                 AccesoUtcjTheme(themeMode = themeMode) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         AccesoNavGraph(
-                            startDestination = start,
+                            homeDestination = home,
                             onOnboardingFinished = { settings.setOnboardingDone() },
                             isStudentRemembered = { settings.getRememberedStudent() != null }
                         )

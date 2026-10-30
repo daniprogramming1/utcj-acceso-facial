@@ -26,6 +26,7 @@ import edu.utcj.acceso.ui.guard.ReauthScreen
 import edu.utcj.acceso.ui.kiosk.KioskScreen
 import edu.utcj.acceso.ui.onboarding.OnboardingScreen
 import edu.utcj.acceso.ui.role.RoleSelectScreen
+import edu.utcj.acceso.ui.splash.SplashScreen
 import edu.utcj.acceso.ui.student.DeleteDataScreen
 import edu.utcj.acceso.ui.student.RegistrationScreen
 import edu.utcj.acceso.ui.student.StudentAccessScreen
@@ -37,9 +38,13 @@ import java.net.URLDecoder
 private typealias Enter = AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition
 private typealias Exit = AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition
 
+/**
+ * Grafo principal. Siempre arranca en [Routes.SPLASH], que navega sola a [homeDestination]
+ * y se elimina de la pila: «Atrás» desde la pantalla principal no vuelve a la bienvenida.
+ */
 @Composable
 fun AccesoNavGraph(
-    startDestination: String,
+    homeDestination: String,
     onOnboardingFinished: () -> Unit,
     isStudentRemembered: () -> Boolean,
     nav: NavHostController = rememberNavController()
@@ -63,12 +68,20 @@ fun AccesoNavGraph(
 
     NavHost(
         navController = nav,
-        startDestination = startDestination,
+        startDestination = Routes.SPLASH,
         enterTransition = enter,
         exitTransition = exit,
         popEnterTransition = popEnter,
         popExitTransition = popExit
     ) {
+        composable(
+            Routes.SPLASH,
+            exitTransition = { fadeOut(tween(Motion.MEDIUM)) }
+        ) {
+            SplashScreen(onFinished = {
+                nav.navigate(homeDestination) { popUpTo(Routes.SPLASH) { inclusive = true } }
+            })
+        }
         composable(Routes.ONBOARDING) {
             OnboardingScreen(onFinish = {
                 onOnboardingFinished()

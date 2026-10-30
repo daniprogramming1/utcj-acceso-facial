@@ -3,6 +3,7 @@ package edu.utcj.acceso.ui.navigation
 import java.net.URLEncoder
 
 object Routes {
+    const val SPLASH = "splash"
     const val ONBOARDING = "onboarding"
     const val ROLE_SELECT = "role_select"
 

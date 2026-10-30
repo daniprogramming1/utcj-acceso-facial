@@ -55,7 +55,7 @@ Generadas con Roborazzi (Robolectric, sin emulador) y datos ficticios — ver [T
 | Área | Qué hace |
 |---|---|
 | Diseño | Sistema de diseño propio (Material 3): tema claro/oscuro/sistema, Plus Jakarta Sans incluida (sin internet), componentes reutilizables, movimiento reducido respetado, textos 100 % en español |
-| Primer uso | *Splash* de Android 12+, 3 páginas de bienvenida y selección de rol con tarjetas ilustradas |
+| Primer uso | *Splash* con la API AndroidX SplashScreen que continúa en una bienvenida animada (logo, nombre, lema y progreso) y navega sola, 3 páginas de bienvenida y selección de rol con tarjetas ilustradas |
 | Alumno | Asistente **Datos → Aviso de privacidad → Listo**; **Mi acceso** con pestañas *QR de acceso* (cuenta regresiva, vigencia elegible, brillo máximo) y *QR de registro*; **Eliminar mis datos** (borra también la llave del Keystore) |
 | QR firmado | `UTCJA1.matrícula.emitido.expira.nonce.firma` con **ECDSA P-256 / SHA-256**; el guardia verifica firma con la llave pública guardada al aprobar, vigencia (±30 s de tolerancia de reloj), vigencia máxima, **nonce de un solo uso**, estatus y horario — todo **sin conexión** |
 | Kiosco | Horizontal por defecto, inmersivo y siempre encendido; cámara frontal con recuadro y línea animada; resultado a pantalla completa verde/rojo con nombre, matrícula, iniciales, hora y motivo; **Llamar al guardia** (crea una incidencia); regreso automático (10 s por defecto) |
@@ -142,7 +142,7 @@ Todo lo visible de la marca vive en un solo lugar:
 1. **`app/src/main/java/edu/utcj/acceso/brand/BrandConfig.kt`**: `APP_NAME`, `INSTITUTION_NAME`, `INSTITUTION_SHORT`, `TAGLINE`, `SUPPORT_EMAIL`, `SUPPORT_WEBSITE`, `SECURITY_DESK_LABEL`, `TIME_ZONE_ID` y la paleta `BrandPalette` (primario, secundario, acento, azul marino). El tema claro/oscuro, el kiosco, el PDF y las ilustraciones se derivan de ahí.
 2. **Logo**: reemplaza `res/drawable/ic_brand_logo.xml` (vector; o apunta `BrandConfig.logoRes` a otro recurso).
 3. **Ícono del launcher**: `res/drawable/ic_launcher_background.xml`, `ic_launcher_foreground.xml` y `ic_launcher_monochrome.xml` (ícono temático de Android 13).
-4. **Splash y colores XML**: `res/values/colors.xml` (`brand_navy`, `window_background_*`) y `res/values/themes.xml`.
+4. **Splash y colores XML**: `res/values/colors.xml` (`brand_primary`, `window_background_*`, `splash_background`) y `res/values/themes.xml`; la bienvenida en Compose está en `ui/splash/SplashScreen.kt`.
 5. **Nombre en el launcher**: `app_name` en `res/values/strings.xml`.
 6. **Paquete** (opcional, para publicar otra app): `namespace`/`applicationId` en `app/build.gradle.kts`.
 7. Ejecuta `./gradlew recordRoborazziDebug` para regenerar las capturas con la nueva marca.

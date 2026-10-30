@@ -37,6 +37,7 @@ import edu.utcj.acceso.ui.kiosk.KioskContent
 import edu.utcj.acceso.ui.kiosk.KioskViewModel
 import edu.utcj.acceso.ui.onboarding.OnboardingContent
 import edu.utcj.acceso.ui.role.RoleSelectScreen
+import edu.utcj.acceso.ui.splash.SplashContent
 import edu.utcj.acceso.ui.student.QrRenderer
 import edu.utcj.acceso.ui.student.QrUi
 import edu.utcj.acceso.ui.student.RegStep
@@ -84,6 +85,16 @@ class ScreenshotTests {
         compose.mainClock.advanceTimeBy(1_500)
         compose.onRoot().captureRoboImage("$OUT/$name.png")
     }
+
+    @Test
+    fun s00_splash() = shot("00-splash") { SplashContent() }
+
+    @Test
+    fun s00b_splashDark() = shot("00b-splash-oscuro", dark = true) { SplashContent() }
+
+    @Test
+    @Config(qualifiers = TABLET)
+    fun s00c_splashTablet() = shot("00c-splash-tableta") { SplashContent() }
 
     @Test
     fun s01_onboarding() = shot("01-onboarding") {

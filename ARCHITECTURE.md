@@ -18,7 +18,7 @@ Repositorios (data/repository)  ──►  Room (data/local)
 - **Inyección**: Hilt (`@HiltAndroidApp`, `@AndroidEntryPoint`, `@HiltViewModel`, `@HiltWorker`).
 - **Persistencia**: Room `acceso_utcj.db` versión **2** (alumnos + llave pública, nonces usados, eventos de acceso, visitantes, incidentes, cola de sincronización, resultados de evaluación). Migraciones explícitas en `AppDatabase.ALL_MIGRATIONS` (ver [Migración 1 → 2](#migración-de-base-de-datos-1--2)).
 - **Navegación**: Navigation Compose, rutas en `ui/navigation/Routes.kt`, grafo en `NavGraph.kt` (ver [Navegación](#navegación)).
-- **MainActivity** (`FragmentActivity`) instala el *splash* (`core-splashscreen`), activa *edge-to-edge*, calcula el `WindowSizeClass` y aplica el tema elegido (`SettingsRepository.themeModeFlow`).
+- **MainActivity** (`FragmentActivity`) instala el *splash* (`core-splashscreen`, sin Activity extra) con animación de salida hacia la ruta Compose `splash` (`ui/splash`), que muestra nombre, lema y progreso y navega sola al inicio quitándose de la pila (`popUpTo(inclusive)`); activa *edge-to-edge*, calcula el `WindowSizeClass` y aplica el tema elegido (`SettingsRepository.themeModeFlow`).
 - **Pantallas = envoltorio + contenido**: cada pantalla tiene un composable con Hilt/ViewModel (`KioskScreen`, `StudentsSection`…) y un composable **sin estado** (`KioskContent`, `StudentsContent`…) que recibe datos y lambdas. Las pruebas de capturas usan solo los segundos.
 
 ## QR firmado

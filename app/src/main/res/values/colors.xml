@@ -6,4 +6,6 @@
     <color name="brand_navy">#FF0B1F3A</color>
     <color name="window_background_light">#FFF7F9FB</color>
     <color name="window_background_dark">#FF0B1220</color>
+    <!-- Fondo del splash nativo; values-night lo cambia al fondo oscuro -->
+    <color name="splash_background">@color/window_background_light</color>
 </resources>
