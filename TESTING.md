@@ -117,7 +117,7 @@ Prepara: **Teléfono A** (alumno) y **Teléfono B** (guardia; opcionalmente una 
 
 ## 4. Capturas de pantalla (Roborazzi)
 
-Las capturas de `docs/screenshots/` se generan en la JVM con **Roborazzi 1.10 + Robolectric 4.11** (gráficos nativos), sin emulador ni dispositivo:
+Las capturas de `docs/screenshots/` se generan en la JVM con **Roborazzi 1.10 + Robolectric 4.12** (gráficos nativos; desde 4.12 también funciona en Windows), sin emulador ni dispositivo:
 
 ```bash
 ./gradlew recordRoborazziDebug                       # todas (escribe docs/screenshots/*.png)

@@ -58,9 +58,13 @@ CameraX (ImageAnalysis, KEEP_ONLY_LATEST) → ML Kit Barcode (solo QR) → ScanD
           → vigencia > máximo del guardia → ahora − 30 s > expira («QR vencido») → nonce usado («QR ya usado»)
           → estatus (BAJA, SUSPENDIDO, PENDIENTE, RECHAZADO) → horario
        3. si la decisión consume el nonce: INSERT OR IGNORE en used_nonces (atómico; si ya existía ⇒ «QR ya usado»)
-  → Panel: tarjeta del alumno; denegado se registra al instante; permitido espera «Registrar entrada» / «No permitir»
-    (si se sale sin decidir se registra DENEGADO «Sin confirmar por el guardia»)
-  → Kiosco: se registra solo (guardia «Kiosco») y muestra la capa verde/roja con el motivo
+  → Panel: tarjeta del alumno + vibración/tono (`rememberScanFeedback`); denegado se registra al instante;
+    permitido abre una ventana de 5 s (`ScanViewModel.UNDO_WINDOW_SEC`) con «No permitir». Al terminar, al tocar
+    «Registrar entrada», al escanear el siguiente QR (la cámara sigue activa) o al salir del panel se registra
+    PERMITIDO; con «No permitir» se registra DENEGADO «Denegado por el guardia». La bitácora sigue siendo solo de alta.
+  → Kiosco: se registra solo (guardia «Kiosco») y muestra la capa verde/roja filtrada por `kioskDisplay`:
+    permitido con nombre corto («¡Pásale, Ana S.!»); denegado con el motivo solo si `DenialReason.kioskPublic`
+    (problemas del código); los motivos personales se ven como «Ahorita no. Acércate con el guardia.»
   → AccessLogRepository.log(método QR, resultado, motivo, guardia, duración) → Room + SyncQueue + SyncWorker
 ```
 
@@ -72,19 +76,19 @@ CameraX (ImageAnalysis, KEEP_ONLY_LATEST) → ML Kit Barcode (solo QR) → ScanD
 
 | Parámetro | Dónde | Predeterminado |
 |---|---|---|
-| **Vigencia del QR de acceso** (alumno) | `SettingsRepository.getStudentQrValiditySec()` (`DEFAULT_STUDENT_QR_VALIDITY_SEC`, opciones `STUDENT_QR_VALIDITY_OPTIONS`); el alumno la elige en **Mi acceso → Vigencia del QR** | **60 s** (30 s / 1 / 2 / 5 min) |
+| **Vigencia del QR de acceso** (alumno) | Fija en `SettingsRepository.STUDENT_QR_VALIDITY_SEC`; el alumno ya no la elige (la clave antigua `student_qr_validity_sec` se purga al arrancar) | **60 s** |
 | **Vigencia máxima aceptada** (guardia) | `SettingsRepository.getGuardMaxQrValiditySec()`, **Panel → Configuración → Acceso con QR** | **5 min** |
 | Tolerancia de reloj | `GuardPolicy.DEFAULT_CLOCK_SKEW_SEC` | ±30 s |
 | **Horario permitido** | `SettingsRepository.getHoursStart()/getHoursEnd()` (`DEFAULT_HOURS_START`/`END`), editable en Configuración; zona `America/Ciudad_Juarez` (`TimeUtil`) | 6:00–22:00 |
 | Regreso del kiosco tras un resultado | `SettingsRepository.getKioskIdleMs()` (`DEFAULT_KIOSK_IDLE_MS`, opciones `KIOSK_IDLE_OPTIONS_MS`), **Configuración → Modo kiosco** | **10 s** (antes 30 s) |
-| Orientación / sonido del kiosco | `SettingsRepository.getKioskOrientation()` / `isKioskSoundEnabled()` | Horizontal / activado |
+| Orientación del kiosco / sonido al escanear (panel y kiosco) | `SettingsRepository.getKioskOrientation()` / `isScanSoundEnabled()` (clave `kiosk_sound`) | Horizontal / activado |
 | Tema | `SettingsRepository.themeModeFlow` (`ThemeMode`), **Configuración → Apariencia** | Sistema |
 | Marca | `brand/BrandConfig.kt` | UTCJ |
 | **Contraseña del guardia** | Se define la primera vez (`FirstPasswordSetupScreen`) y se cambia en **Panel → Configuración → Seguridad** (o **Más → Cambiar contraseña** en teléfono). Lógica en `GuardAuthManager` | — |
 | Política de bloqueo | `GuardAuthManager.MAX_ATTEMPTS` / `LOCKOUT_MS` | 5 intentos / 5 min |
 | PBKDF2 | `PasswordHasher.ITERATIONS`, `KEY_LENGTH_BITS`, `SALT_BYTES` | 120 000 / 256 bits / 16 bytes |
 | Versión de consentimiento | `ConsentRecord.CURRENT_VERSION` | 2.0.0 |
-| Firestore | `FirestoreDataSource.FIRESTORE_COMPILED_IN` + Gradle (ver README) | Desactivado |
+| Firestore | `BuildConfig.FIREBASE_ENABLED` (automático si existe `app/google-services.json`, ver README) | Desactivado sin el archivo |
 
 Las contraseñas olvidadas no se pueden recuperar (solo existe el hash). Restablecer = borrar datos de la app (Ajustes de Android → Apps → Acceso UTCJ → Almacenamiento → Borrar datos), lo que también elimina los registros locales.
 
@@ -154,11 +158,14 @@ Splash ─► Onboarding (solo la primera vez) ─► Selección de rol
 |---|---|---|
 | Marca | `brand/BrandConfig.kt` | Nombre, institución, soporte, zona horaria, `BrandPalette`, `logoRes` |
 | Color | `ui/theme/Color.kt` | Esquemas claro/oscuro completos (incl. `surfaceContainer*`), escala neutra, `ExtendedColors` (éxito/aviso/peligro/info + contenedores, colores de gráficas, degradado del héroe) vía `AppTheme.extended` |
-| Tipografía | `ui/theme/Type.kt` | Plus Jakarta Sans (TTF en `res/font`, OFL), escala M3 completa y `KioskType` (64/44/26 sp) |
-| Formas | `ui/theme/Shape.kt` | `AppShapes`: botón 16, tarjeta 20, campo 14, píldora |
+| Tipografía | `ui/theme/Type.kt` | Bricolage Grotesque (variable: peso + tamaño óptico) para display/títulos y Atkinson Hyperlegible para lectura (TTF en `res/font`, OFL); escala M3, `AppType` (rótulos y valores del pase) y `KioskType` (64/44/26 sp) |
+| Pase vivo | `ui/components/PassCard.kt`, `ui/components/HorizonBand.kt`, `domain/time/DayPhase.kt` | Tarjeta con muescas y perforación; banda de horizonte cuyo sol avanza con la vigencia del QR y cuyo cielo sigue la hora de Juárez (ver `DISEÑO.md` §2) |
+| Formas | `ui/theme/Shape.kt` | `AppShapes`: botón 14, tarjeta 20, campo 12, pase 28, banda 16, píldora (radios distintos por pieza) |
+| Movimiento con nombre | `ui/theme/Motion.kt` | `TAP` 120 · `STATE` 200 · `PERFORATE` 240 · `LANE` 300 · `PAGE` 320 ms; `Modifier.laneSweep` y `AnimatedPerforation` en `ui/components/LaneSweep.kt` |
+| Accesibilidad | `ContrastTest`, capturas `a11y-*` | Contraste AA verificado por prueba; capturas con `fontScale` 1.5 |
 | Espaciado | `ui/theme/Spacing.kt` | `xxs…huge`, márgenes por tamaño de ventana, `contentMaxWidth` 640, `formMaxWidth` 520, altura de botón 56 |
 | Movimiento | `ui/theme/Motion.kt` | Duraciones/curvas; `LocalReducedMotion` (escala de animación del sistema = 0) |
-| Componentes | `ui/components/*` | `AccesoTopBar`, `PrimaryButton`/`SecondaryButton`/`TonalButton`/`DangerButton`, `KpiCard`, `SectionHeader`, `AlertBanner`, `StatusPill` (Aprobado/Pendiente/Baja/Rechazado…), `EmptyState`, `Modifier.shimmer`/`SkeletonList`, `ConfirmDialog`, `AppSearchField`, `PasswordField` + `PasswordStrengthMeter`, `InitialsAvatar`, `AppListItem`, `StepIndicator`, gráficas Canvas (`BarChart`, `DonutChart`, `LineChart`), `QrScannerCamera`, `ScanFrameOverlay`, `GuidanceChip`, `CountdownRing`, `CameraPermissionGate`, ilustraciones vectoriales en Canvas |
+| Componentes | `ui/components/*` | `AccesoTopBar`, `PrimaryButton`/`SecondaryButton`/`TonalButton`/`DangerButton`, `KpiCard`, `SectionHeader`, `AlertBanner`, `StatusPill` (Aprobado/Pendiente/Baja/Rechazado…), `EmptyState`, `Modifier.shimmer`/`SkeletonList`, `ConfirmDialog`, `AppSearchField`, `PasswordField` + `PasswordStrengthMeter`, `InitialsAvatar`, `AppListItem`, `StepIndicator`, gráficas Canvas (`BarChart`, `DonutChart`, `LineChart`), `QrScannerCamera`, `ScanFrameOverlay`, `GuidanceChip`, `PassCard`, `HorizonBand`, `rememberScanFeedback`, `CameraPermissionGate`, ilustraciones vectoriales en Canvas |
 
 Reglas: textos en español; `contentDescription` en íconos con significado; objetivos táctiles ≥ 48 dp; contraste AA (texto secundario sobre superficies ≥ 4.5:1); sin contenido recortado (columnas con *scroll*, `maxLines` + elipsis); el kiosco siempre usa su paleta oscura de alto contraste.
 
@@ -166,7 +173,7 @@ Lógica pura separada de la UI para probarla en JVM: `domain/qr` (formato, firma
 
 ## UI (resumen)
 
-- Material 3 con la paleta de `BrandConfig` (teal `#00796B` / `#14B8A6`, azul `#1D4ED8`, azul marino `#0B1F3A`).
+- Material 3 con la paleta «Atardecer de frontera» de `BrandConfig` (terracota `#C2410C`, teal UTCJ `#00796B` como acento, tinta `#1B1F3B`, neutros arena, kiosco `#141A2E`).
 - Logo provisional vectorial `res/drawable/ic_brand_logo.xml`; ícono adaptable con capa monocroma (`mipmap-anydpi/ic_launcher.xml`).
 - `util/WindowSizeClass.kt` → `LocalWindowSizeClass` (desde `calculateWindowSizeClass`) con respaldo por configuración para pruebas.
 - Todos los textos visibles están en español.

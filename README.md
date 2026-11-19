@@ -54,7 +54,7 @@ Generadas con Roborazzi (Robolectric, sin emulador) y datos ficticios — ver [T
 
 | Área | Qué hace |
 |---|---|
-| Diseño | Sistema de diseño propio (Material 3): tema claro/oscuro/sistema, Plus Jakarta Sans incluida (sin internet), componentes reutilizables, movimiento reducido respetado, textos 100 % en español |
+| Diseño | Sistema de diseño propio (Material 3): tema claro/oscuro/sistema, Bricolage Grotesque + Atkinson Hyperlegible incluidas (sin internet), componentes reutilizables, movimiento reducido respetado, textos 100 % en español |
 | Primer uso | *Splash* con la API AndroidX SplashScreen que continúa en una bienvenida animada (logo, nombre, lema y progreso) y navega sola, 3 páginas de bienvenida y selección de rol con tarjetas ilustradas |
 | Alumno | Asistente **Datos → Aviso de privacidad → Listo**; **Mi acceso** con pestañas *QR de acceso* (cuenta regresiva, vigencia elegible, brillo máximo) y *QR de registro*; **Eliminar mis datos** (borra también la llave del Keystore) |
 | QR firmado | `UTCJA1.matrícula.emitido.expira.nonce.firma` con **ECDSA P-256 / SHA-256**; el guardia verifica firma con la llave pública guardada al aprobar, vigencia (±30 s de tolerancia de reloj), vigencia máxima, **nonce de un solo uso**, estatus y horario — todo **sin conexión** |
@@ -100,13 +100,14 @@ No hace falta desinstalar: la base de datos migra sola (v1 → v2) conservando a
 
 La app funciona 100 % sin conexión. Para sincronizar la bitácora con Firestore:
 
-1. Crea un proyecto en [Firebase Console](https://console.firebase.google.com/) y registra la app Android con el paquete `edu.utcj.acceso` (y `edu.utcj.acceso.debug` para debug).
-2. Descarga `google-services.json` a `app/` (está en `.gitignore`; **no lo subas**).
-3. Descomenta en `build.gradle.kts` (raíz) `alias(libs.plugins.google.services) apply false`.
-4. Descomenta en `app/build.gradle.kts` el plugin `alias(libs.plugins.google.services)` y las dependencias `firebase-bom` / `firebase-firestore`.
-5. En `FirestoreDataSource.kt` cambia `FIRESTORE_COMPILED_IN = true` e implementa la escritura indicada en el comentario (`collection("access_events").document(syncKey).set(...)`). Usar `syncKey` como ID de documento hace que la escritura sea idempotente.
+1. Crea un proyecto en [Firebase Console](https://console.firebase.google.com/) y registra **dos** apps Android: `edu.utcj.acceso` (release) y `edu.utcj.acceso.debug` (debug).
+2. En el proyecto, crea una base de datos **Cloud Firestore**.
+3. Descarga `google-services.json` (incluye ambas apps) a `app/`. Está en `.gitignore`: **no lo subas**.
+4. Sincroniza Gradle y compila. Nada más.
 
-Mientras Firebase esté desactivado, el worker marca los eventos como sincronizados localmente para vaciar la cola.
+Al existir `app/google-services.json`, `app/build.gradle.kts` aplica el plugin `com.google.gms.google-services` y genera `BuildConfig.FIREBASE_ENABLED = true`. `FirestoreDataSource` escribe cada evento en `access_events/{syncKey}`; usar `syncKey` como ID hace la escritura idempotente.
+
+Sin el archivo, la app compila igual, y el worker marca los eventos como sincronizados localmente para vaciar la cola.
 
 ## Estructura
 
@@ -168,4 +169,4 @@ Todo lo visible de la marca vive en un solo lugar:
 
 ## Licencias de terceros
 
-- Tipografía **Plus Jakarta Sans** — SIL Open Font License 1.1 (`docs/licenses/PlusJakartaSans-OFL.txt`).
+- Tipografías **Bricolage Grotesque** y **Atkinson Hyperlegible** — SIL Open Font License 1.1 (`docs/licenses/BricolageGrotesque-OFL.txt`, `docs/licenses/AtkinsonHyperlegible-OFL.txt`).

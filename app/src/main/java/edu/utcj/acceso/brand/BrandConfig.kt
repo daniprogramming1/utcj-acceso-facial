@@ -27,12 +27,34 @@ object BrandConfig {
 
     const val INSTITUTION_NAME = "Universidad Tecnológica de Ciudad Juárez"
     const val INSTITUTION_SHORT = "UTCJ"
-    const val TAGLINE = "Control de acceso inteligente, rápido y privado"
+    const val TAGLINE = "Tu pase de entrada, sin filas ni papeles."
 
     /** Contacto de soporte mostrado en «Acerca de» y en el kiosco. Confirmar con la institución. */
     const val SUPPORT_EMAIL = "soporte.acceso@utcj.edu.mx"
     const val SUPPORT_WEBSITE = "www.utcj.edu.mx"
     const val SECURITY_DESK_LABEL = "Caseta de vigilancia"
+
+    /** Matrículas solo numéricas (UTCJ: 8 dígitos): el registro abre el teclado numérico. */
+    const val MATRICULA_NUMERIC = true
+
+    /**
+     * Carreras que el alumno elige al registrarse (con «Otra carrera…» como respaldo).
+     * Tomadas de los datos del proyecto (CSV de estatus y capturas): CONFIRMAR con Servicios
+     * Escolares y mantener igual que la columna `carrera` del CSV institucional.
+     */
+    val CARRERAS = listOf(
+        "Administración",
+        "Contaduría",
+        "Diseño Digital",
+        "Energías Renovables",
+        "Ingeniería en Sistemas",
+        "Ingeniería en Software",
+        "Ingeniería Industrial",
+        "Manufactura",
+        "Mecatrónica",
+        "Negocios Internacionales",
+        "Redes y Telecomunicaciones"
+    )
 
     /** Zona horaria institucional para reloj del kiosco, bitácora y reportes. */
     const val TIME_ZONE_ID = "America/Ciudad_Juarez"
@@ -40,16 +62,20 @@ object BrandConfig {
     @DrawableRes
     val logoRes: Int = R.drawable.ic_brand_logo
 
-    /** Paleta institucional. El tema claro/oscuro se deriva de estos valores. */
+    /**
+     * Paleta «Atardecer de frontera» (ver DISEÑO.md §3). El tema claro/oscuro se deriva de aquí.
+     * Protagonista terracota; el teal institucional queda como acento.
+     */
     val palette = BrandPalette(
-        primary = Color(0xFF00796B),       // verde azulado del logotipo
-        primaryBright = Color(0xFF14B8A6), // acento luminoso (anillos, gráficas)
-        primaryLight = Color(0xFF5EEAD4),  // variante para tema oscuro
-        secondary = Color(0xFF1D4ED8),     // azul institucional
-        secondaryLight = Color(0xFF93B4FF),
+        primary = Color(0xFFC2410C),       // Terracota Juárez (5.2:1 sobre blanco)
+        primaryBright = Color(0xFFEA580C), // acento luminoso (gráficas, sol del pase)
+        primaryLight = Color(0xFFFDBA8C),  // variante para tema oscuro
+        secondary = Color(0xFF00796B),     // teal UTCJ (guiño institucional)
+        secondaryLight = Color(0xFF5EEAD4),
         accentGreen = Color(0xFF22A06B),   // verde complementario del logotipo
-        navy = Color(0xFF0B1F3A),          // fondo del kiosco / splash
-        navyLight = Color(0xFF12315A)
+        navy = Color(0xFF141A2E),          // Noche del desierto: kiosco / splash
+        navyLight = Color(0xFF1F2742),
+        ink = Color(0xFF1B1F3B)            // tinta para texto principal
     )
 }
 
@@ -61,5 +87,6 @@ data class BrandPalette(
     val secondaryLight: Color,
     val accentGreen: Color,
     val navy: Color,
-    val navyLight: Color
+    val navyLight: Color,
+    val ink: Color
 )

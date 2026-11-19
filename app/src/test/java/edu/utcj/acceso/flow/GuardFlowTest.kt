@@ -136,7 +136,7 @@ class GuardFlowTest {
     private fun assertPanelWorks(expectEmpty: Boolean) {
         compose.waitForText("Actividad reciente")
         drawFrames() // estado de carga (esqueletos) y animación de entrada de las gráficas
-        if (expectEmpty) compose.waitForText("Sin actividad")
+        if (expectEmpty) compose.waitForText("Todavía nadie ha cruzado")
         compose.waitForText("Accesos por hora")
         compose.waitForIdle()
         drawFrames()
@@ -220,7 +220,7 @@ class GuardFlowTest {
         compose.waitForText("Acceso de seguridad")
         type("Contraseña", "Seguro#2026")
         compose.onNode(hasText("Entrar al panel") and hasClickAction()).performClick()
-        compose.waitForText("Sin actividad")
+        compose.waitForText("Todavía nadie ha cruzado")
         drawFrames()
         for (item in listOf("Escanear QR", "Alumnos", "Aprobaciones", "Bitácora", "Visitantes", "Incidencias", "Configuración", "Inicio")) {
             compose.onNode(hasText(item) and hasClickAction()).performClick()
@@ -250,7 +250,8 @@ class GuardFlowTest {
         val phone = SoftwareQrSigner.generate()
         val now = System.currentTimeMillis()
         // Horario que incluye la hora actual, para que la prueba pase a cualquier hora.
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        // Misma zona que usa la app para decidir el horario (no la zona por defecto de la JVM).
+        val hour = edu.utcj.acceso.util.TimeUtil.hourOfDay(now)
         SettingsRepository(store).setHours(hour, (hour + 2) % 24)
         val registration = QrCrypto.registrationQr(phone, "20249999", "Ana López Núñez", "TI · 5A", "ana@utcj.edu.mx", "2.0.0", now)
         login()

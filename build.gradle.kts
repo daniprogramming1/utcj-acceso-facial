@@ -4,6 +4,6 @@ plugins {
     alias(libs.plugins.kotlin.kapt) apply false
     alias(libs.plugins.hilt) apply false
     alias(libs.plugins.roborazzi) apply false
-    // Optional Firebase — uncomment when google-services.json is present:
-    // alias(libs.plugins.google.services) apply false
+    // Firebase: :app aplica el plugin solo si existe app/google-services.json
+    alias(libs.plugins.google.services) apply false
 }

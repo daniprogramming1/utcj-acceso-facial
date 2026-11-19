@@ -1,27 +1,52 @@
 package edu.utcj.acceso.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import edu.utcj.acceso.R
 
-/**
- * Plus Jakarta Sans (SIL Open Font License 1.1), empaquetada en `res/font`:
- * funciona 100 % sin conexión (no usa fuentes descargables).
+/*
+ * Tipografía (DISEÑO.md §3), empaquetada en `res/font` (SIL OFL 1.1, funciona sin conexión):
+ * - Display: Bricolage Grotesque (variable: peso + tamaño óptico) para títulos y números grandes.
+ * - Lectura: Atkinson Hyperlegible (diseñada para máxima legibilidad, útil al sol en la caseta).
  */
-val JakartaSans = FontFamily(
-    Font(R.font.plus_jakarta_sans_regular, FontWeight.Normal),
-    Font(R.font.plus_jakarta_sans_medium, FontWeight.Medium),
-    Font(R.font.plus_jakarta_sans_semibold, FontWeight.SemiBold),
-    Font(R.font.plus_jakarta_sans_bold, FontWeight.Bold),
-    Font(R.font.plus_jakarta_sans_extrabold, FontWeight.ExtraBold)
+
+// Fuentes variables: API experimental en Compose 1.6, estable a partir de 1.7.
+@OptIn(ExperimentalTextApi::class)
+private fun bricolage(weight: FontWeight, opticalSize: Float) = Font(
+    R.font.bricolage_grotesque,
+    weight = weight,
+    variationSettings = FontVariation.Settings(
+        FontVariation.weight(weight.weight),
+        FontVariation.Setting("opsz", opticalSize)
+    )
 )
 
-private fun style(weight: FontWeight, size: Int, line: Int, spacing: Double = 0.0) = TextStyle(
-    fontFamily = JakartaSans,
+/** Títulos grandes (tamaño óptico de cartel). */
+val BricolageDisplay = FontFamily(
+    bricolage(FontWeight.SemiBold, 48f),
+    bricolage(FontWeight.Bold, 48f),
+    bricolage(FontWeight.ExtraBold, 48f)
+)
+
+/** Títulos pequeños (tamaño óptico de texto, más abierto). */
+val BricolageTitle = FontFamily(
+    bricolage(FontWeight.SemiBold, 18f),
+    bricolage(FontWeight.Bold, 18f)
+)
+
+val AtkinsonHyperlegible = FontFamily(
+    Font(R.font.atkinson_hyperlegible_regular, FontWeight.Normal),
+    Font(R.font.atkinson_hyperlegible_bold, FontWeight.Bold)
+)
+
+private fun style(family: FontFamily, weight: FontWeight, size: Int, line: Int, spacing: Double = 0.0) = TextStyle(
+    fontFamily = family,
     fontWeight = weight,
     fontSize = size.sp,
     lineHeight = line.sp,
@@ -29,28 +54,38 @@ private fun style(weight: FontWeight, size: Int, line: Int, spacing: Double = 0.
 )
 
 val AccesoTypography = Typography(
-    displayLarge = style(FontWeight.ExtraBold, 56, 64, -1.0),
-    displayMedium = style(FontWeight.ExtraBold, 44, 52, -0.75),
-    displaySmall = style(FontWeight.Bold, 36, 44, -0.5),
-    headlineLarge = style(FontWeight.Bold, 30, 38, -0.4),
-    headlineMedium = style(FontWeight.Bold, 26, 34, -0.3),
-    headlineSmall = style(FontWeight.Bold, 22, 30, -0.2),
-    titleLarge = style(FontWeight.Bold, 20, 28, -0.1),
-    titleMedium = style(FontWeight.SemiBold, 16, 24, 0.0),
-    titleSmall = style(FontWeight.SemiBold, 14, 20, 0.0),
-    bodyLarge = style(FontWeight.Normal, 16, 24, 0.1),
-    bodyMedium = style(FontWeight.Normal, 14, 21, 0.1),
-    bodySmall = style(FontWeight.Normal, 12, 17, 0.2),
-    labelLarge = style(FontWeight.SemiBold, 14, 20, 0.1),
-    labelMedium = style(FontWeight.SemiBold, 12, 16, 0.3),
-    labelSmall = style(FontWeight.SemiBold, 11, 14, 0.5)
+    displayLarge = style(BricolageDisplay, FontWeight.ExtraBold, 56, 60, -1.5),
+    displayMedium = style(BricolageDisplay, FontWeight.ExtraBold, 44, 48, -1.0),
+    displaySmall = style(BricolageDisplay, FontWeight.Bold, 36, 40, -0.6),
+    headlineLarge = style(BricolageDisplay, FontWeight.Bold, 30, 36, -0.5),
+    headlineMedium = style(BricolageDisplay, FontWeight.Bold, 26, 32, -0.4),
+    headlineSmall = style(BricolageDisplay, FontWeight.Bold, 22, 28, -0.2),
+    titleLarge = style(BricolageTitle, FontWeight.Bold, 20, 26, -0.1),
+    titleMedium = style(AtkinsonHyperlegible, FontWeight.Bold, 16, 22, 0.0),
+    titleSmall = style(AtkinsonHyperlegible, FontWeight.Bold, 14, 20, 0.1),
+    bodyLarge = style(AtkinsonHyperlegible, FontWeight.Normal, 16, 24, 0.15),
+    bodyMedium = style(AtkinsonHyperlegible, FontWeight.Normal, 14, 21, 0.15),
+    bodySmall = style(AtkinsonHyperlegible, FontWeight.Normal, 12, 17, 0.25),
+    labelLarge = style(AtkinsonHyperlegible, FontWeight.Bold, 14, 20, 0.1),
+    labelMedium = style(AtkinsonHyperlegible, FontWeight.Bold, 12, 16, 0.3),
+    labelSmall = style(AtkinsonHyperlegible, FontWeight.Bold, 11, 14, 0.6)
 )
+
+/** Estilos propios fuera de la escala M3. */
+object AppType {
+    /** Rótulo en mayúsculas espaciadas (encabezado del pase: «PASE DE ENTRADA», «MATRÍCULA»). */
+    val eyebrow = style(AtkinsonHyperlegible, FontWeight.Bold, 11, 14, 1.4)
+
+    /** Valores del pase (matrícula, carrera): números tabulares para que no «bailen». */
+    val passValue = style(BricolageTitle, FontWeight.Bold, 16, 20, 0.0)
+        .copy(fontFeatureSettings = "tnum")
+}
 
 /** Estilos para el kiosco: lectura a 1–2 m de distancia. */
 object KioskType {
-    val hero = style(FontWeight.ExtraBold, 64, 70, -1.2)
-    val title = style(FontWeight.ExtraBold, 44, 52, -0.8)
-    val subtitle = style(FontWeight.SemiBold, 26, 34, -0.2)
-    val clock = style(FontWeight.Bold, 52, 58, -1.0)
-    val body = style(FontWeight.Medium, 20, 28, 0.0)
+    val hero = style(BricolageDisplay, FontWeight.ExtraBold, 64, 68, -1.6)
+    val title = style(BricolageDisplay, FontWeight.ExtraBold, 44, 50, -1.0)
+    val subtitle = style(BricolageDisplay, FontWeight.SemiBold, 26, 32, -0.2)
+    val clock = style(BricolageDisplay, FontWeight.Bold, 52, 56, -1.0).copy(fontFeatureSettings = "tnum")
+    val body = style(AtkinsonHyperlegible, FontWeight.Normal, 20, 28, 0.1)
 }

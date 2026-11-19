@@ -50,12 +50,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import edu.utcj.acceso.ui.components.laneSweep
 import edu.utcj.acceso.ui.scan.ScanCardModel
 import edu.utcj.acceso.ui.theme.AppTheme
 import edu.utcj.acceso.ui.theme.KioskType
 import edu.utcj.acceso.ui.theme.Spacing
-import edu.utcj.acceso.util.TimeUtil
-import edu.utcj.acceso.util.initialsOf
 
 private val GrantedTop = Color(0xFF0E9F6E)
 private val GrantedBottom = Color(0xFF046C4E)
@@ -73,24 +72,21 @@ fun KioskResultOverlay(
     onDismiss: () -> Unit
 ) {
     val colors = if (result.allowed) listOf(GrantedTop, GrantedBottom) else listOf(DeniedTop, DeniedBottom)
-    val known = result.known
-    val title = if (result.allowed) "Acceso permitido" else "Acceso denegado"
-    val a11y = buildString {
-        append(title)
-        if (known) append(". ${result.nombre}")
-        result.reasonTitle?.let { append(". $it") }
-    }
+    // La fila ve esta pantalla: solo se muestra lo que kioskDisplay permite (sin matrícula ni
+    // motivos personales). El registro completo queda en la bitácora.
+    val display = kioskDisplay(result)
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(colors))
+            .laneSweep(key = result, color = Color.White, enabled = result.allowed)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClickLabel = "Volver al inicio",
                 onClick = onDismiss
             )
-            .semantics { liveRegion = LiveRegionMode.Assertive; contentDescription = a11y }
+            .semantics { liveRegion = LiveRegionMode.Assertive; contentDescription = display.spoken }
     ) {
         val landscape = maxWidth > maxHeight
         val compact = maxHeight < 520.dp || maxWidth < 420.dp
@@ -103,17 +99,15 @@ fun KioskResultOverlay(
         val content: @Composable (Modifier) -> Unit = { m ->
             Column(m, horizontalAlignment = if (landscape) Alignment.Start else Alignment.CenterHorizontally) {
                 Text(
-                    title,
+                    display.title,
                     style = if (compact) KioskType.title else KioskType.hero,
                     color = Color.White,
                     textAlign = if (landscape) TextAlign.Start else TextAlign.Center
                 )
                 Spacer(Modifier.height(Spacing.md))
-                if (known) {
-                    PersonRow(result, large = large)
-                }
-                result.reasonTitle?.let {
-                    Spacer(Modifier.height(Spacing.md))
+                if (display.initials != null) {
+                    PersonRow(display.initials, display.subtitle.orEmpty(), large = large)
+                } else display.subtitle?.let {
                     Text(
                         it,
                         style = KioskType.subtitle,
@@ -121,7 +115,7 @@ fun KioskResultOverlay(
                         textAlign = if (landscape) TextAlign.Start else TextAlign.Center
                     )
                 }
-                result.reasonDetail?.let {
+                display.detail?.let {
                     Spacer(Modifier.height(Spacing.xs))
                     Text(
                         it,
@@ -173,28 +167,24 @@ fun KioskResultOverlay(
     }
 }
 
+/** Avatar con iniciales + «Acceso permitido · 07:42». Sin matrícula ni carrera (pantalla pública). */
 @Composable
-private fun PersonRow(result: ScanCardModel, large: Boolean) {
+private fun PersonRow(initials: String, caption: String, large: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(if (large) 84.dp else 64.dp).background(Color.White.copy(alpha = 0.2f), CircleShape),
+            Modifier.size(if (large) 72.dp else 56.dp).background(Color.White.copy(alpha = 0.2f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Text(initialsOf(result.nombre), color = Color.White, fontSize = if (large) 30.sp else 24.sp, style = MaterialTheme.typography.titleLarge)
+            Text(initials, color = Color.White, fontSize = if (large) 26.sp else 22.sp, style = MaterialTheme.typography.titleLarge)
         }
         Spacer(Modifier.width(Spacing.lg))
-        Column {
-            Text(
-                result.nombre, style = if (large) KioskType.title.copy(fontSize = 36.sp, lineHeight = 42.sp) else KioskType.subtitle, color = Color.White,
-                maxLines = 2, overflow = TextOverflow.Ellipsis
-            )
-            val meta = buildList {
-                add("Matrícula ${result.matricula}")
-                result.carrera.takeIf { it.isNotBlank() }?.let(::add)
-                add(TimeUtil.formatTime(result.timeMs))
-            }.joinToString("  ·  ")
-            Text(meta, style = if (large) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium, color = Color.White.copy(alpha = 0.85f))
-        }
+        Text(
+            caption,
+            style = KioskType.subtitle,
+            color = Color.White.copy(alpha = 0.92f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

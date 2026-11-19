@@ -1,12 +1,10 @@
 package edu.utcj.acceso.ui.student
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,16 +35,15 @@ import androidx.compose.material.icons.rounded.Policy
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.School
-import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Warning
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -59,18 +56,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import edu.utcj.acceso.brand.BrandConfig
 import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.data.repository.StudentRepository
 import edu.utcj.acceso.domain.model.ConsentRecord
@@ -79,21 +76,29 @@ import edu.utcj.acceso.domain.model.StudentStatus
 import edu.utcj.acceso.domain.qr.QrCrypto
 import edu.utcj.acceso.domain.qr.QrKeyStore
 import edu.utcj.acceso.domain.qr.QrSigner
+import edu.utcj.acceso.domain.time.DayPhase
+import edu.utcj.acceso.domain.time.horizonProgress
 import edu.utcj.acceso.ui.components.AccesoTopBar
 import edu.utcj.acceso.ui.components.AlertBanner
 import edu.utcj.acceso.ui.components.AppCard
+import edu.utcj.acceso.ui.components.BrandLogo
 import edu.utcj.acceso.ui.components.ConfirmDialog
 import edu.utcj.acceso.ui.components.DetailRow
-import edu.utcj.acceso.ui.components.InitialsAvatar
+import edu.utcj.acceso.ui.components.HorizonBand
+import edu.utcj.acceso.ui.components.LinkButton
+import edu.utcj.acceso.ui.components.PassCard
 import edu.utcj.acceso.ui.components.PrimaryButton
 import edu.utcj.acceso.ui.components.SecondaryButton
 import edu.utcj.acceso.ui.components.SectionHeader
 import edu.utcj.acceso.ui.components.StatusPill
-import edu.utcj.acceso.ui.components.Tone
 import edu.utcj.acceso.ui.components.TonalButton
+import edu.utcj.acceso.ui.components.Tone
 import edu.utcj.acceso.ui.components.labelEs
 import edu.utcj.acceso.ui.components.screenHorizontalPadding
+import edu.utcj.acceso.ui.components.tone
 import edu.utcj.acceso.ui.theme.AppTheme
+import edu.utcj.acceso.ui.theme.AppType
+import edu.utcj.acceso.ui.theme.Motion
 import edu.utcj.acceso.ui.theme.Spacing
 import edu.utcj.acceso.util.MaxBrightnessEffect
 import edu.utcj.acceso.util.TimeUtil
@@ -115,8 +120,10 @@ import javax.inject.Inject
 /** QR de acceso vigente con su cuenta regresiva. */
 data class QrUi(val image: ImageBitmap, val secondsLeft: Int, val totalSeconds: Int)
 
-/** Pestañas del inicio del alumno. */
+/** Modos del pase del alumno. */
 enum class StudentQrTab(val label: String) { ACCESS("QR de acceso"), REGISTRATION("QR de registro") }
+
+private const val QR_TICK_MS = 250L
 
 @HiltViewModel
 class StudentHomeViewModel @Inject constructor(
@@ -135,8 +142,9 @@ class StudentHomeViewModel @Inject constructor(
     private val _tab = MutableStateFlow(if (settings.isStudentMarkedApproved()) StudentQrTab.ACCESS else StudentQrTab.REGISTRATION)
     val tab: StateFlow<StudentQrTab> = _tab.asStateFlow()
 
-    private val _validity = MutableStateFlow(settings.getStudentQrValiditySec())
-    val validity: StateFlow<Int> = _validity.asStateFlow()
+    /** El alumno tocó «Ya me aprobaron» (su teléfono no se entera de la aprobación del guardia). */
+    private val _markedApproved = MutableStateFlow(settings.isStudentMarkedApproved())
+    val markedApproved: StateFlow<Boolean> = _markedApproved.asStateFlow()
 
     private val _registrationQr = MutableStateFlow<ImageBitmap?>(null)
     val registrationQr: StateFlow<ImageBitmap?> = _registrationQr.asStateFlow()
@@ -176,13 +184,8 @@ class StudentHomeViewModel @Inject constructor(
 
     fun markApproved() {
         settings.setStudentMarkedApproved(true)
+        _markedApproved.value = true
         _tab.value = StudentQrTab.ACCESS
-    }
-
-    fun setValidity(sec: Int) {
-        settings.setStudentQrValiditySec(sec)
-        _validity.value = settings.getStudentQrValiditySec()
-        if (accessJob?.isActive == true) startAccessQr()
     }
 
     /** Genera el QR de acceso y lo renueva solo al vencer. */
@@ -191,8 +194,8 @@ class StudentHomeViewModel @Inject constructor(
         val sg = signer ?: return
         accessJob?.cancel()
         accessJob = viewModelScope.launch {
+            val total = SettingsRepository.STUDENT_QR_VALIDITY_SEC
             while (isActive) {
-                val total = _validity.value
                 val now = System.currentTimeMillis()
                 val image = withContext(Dispatchers.Default) {
                     QrRenderer.render(QrCrypto.accessQr(sg, mat, total, now)).asImageBitmap()
@@ -202,7 +205,7 @@ class StudentHomeViewModel @Inject constructor(
                     val left = ((expires - System.currentTimeMillis() + 999) / 1000).toInt()
                     if (left <= 0) break
                     _accessQr.value = QrUi(image, left, total)
-                    delay(250)
+                    delay(QR_TICK_MS)
                 }
             }
         }
@@ -235,10 +238,10 @@ fun StudentHomeScreen(
     val student by vm.student.collectAsStateWithLifecycle()
     val hasKey by vm.hasKey.collectAsStateWithLifecycle()
     val tab by vm.tab.collectAsStateWithLifecycle()
-    val validity by vm.validity.collectAsStateWithLifecycle()
     val regQr by vm.registrationQr.collectAsStateWithLifecycle()
     val accessQr by vm.accessQr.collectAsStateWithLifecycle()
-    // El QR de acceso solo se genera mientras la pestaña está visible.
+    val markedApproved by vm.markedApproved.collectAsStateWithLifecycle()
+    // El QR de acceso solo se genera mientras ese modo está visible.
     DisposableEffect(tab, hasKey) {
         if (tab == StudentQrTab.ACCESS && hasKey) vm.startAccessQr() else vm.stopAccessQr()
         onDispose { vm.stopAccessQr() }
@@ -251,10 +254,11 @@ fun StudentHomeScreen(
         tab = tab,
         registrationQr = regQr,
         accessQr = accessQr,
-        validitySec = validity,
+        registrationDone = markedApproved || student?.status?.allowsAccess() == true,
+        // Se recompone con cada tick del QR, así el cielo del pase sigue la hora real.
+        nowMs = System.currentTimeMillis(),
         onTab = vm::selectTab,
         onMarkApproved = vm::markApproved,
-        onValidity = vm::setValidity,
         onBack = onBack,
         onReRegister = onReRegister,
         onDeleteData = { onDeleteData(vm.matricula) },
@@ -270,10 +274,11 @@ fun StudentHomeContent(
     tab: StudentQrTab,
     registrationQr: ImageBitmap?,
     accessQr: QrUi?,
-    validitySec: Int,
+    /** Ya se activó el pase: el QR de registro deja de estar a la vista (queda un enlace). */
+    registrationDone: Boolean,
+    nowMs: Long,
     onTab: (StudentQrTab) -> Unit,
     onMarkApproved: () -> Unit,
-    onValidity: (Int) -> Unit,
     onBack: () -> Unit,
     onReRegister: () -> Unit,
     onDeleteData: () -> Unit,
@@ -296,21 +301,31 @@ fun StudentHomeContent(
                 .padding(horizontal = screenHorizontalPadding(), vertical = Spacing.sm),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            val name = student?.nombre ?: matricula
-            ProfileHeader(name, matricula, student)
+            Greeting(student?.nombre ?: matricula)
             Spacer(Modifier.height(Spacing.lg))
-            val qrCard: @Composable (Modifier) -> Unit = { m ->
+            val pass: @Composable (Modifier) -> Unit = { m ->
                 if (!hasKey) MissingKeyCard(onReRegister, m)
-                else QrCard(student, tab, registrationQr, accessQr, validitySec, onTab, onMarkApproved, onValidity, m)
+                else Column(m, verticalArrangement = Arrangement.spacedBy(Spacing.md)) {
+                    // Con el pase activo el QR de registro ya no estorba; solo vuelve si se pide.
+                    if (!registrationDone || tab == StudentQrTab.REGISTRATION) QrModeSwitch(tab, onTab)
+                    LivePass(student, matricula, tab, registrationQr, accessQr, nowMs, onMarkApproved)
+                    if (registrationDone && tab == StudentQrTab.ACCESS) {
+                        LinkButton(
+                            "¿Te pidieron tu QR de registro?",
+                            onClick = { onTab(StudentQrTab.REGISTRATION) },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
+                    }
+                }
             }
             if (compact) {
-                Column(Modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(Spacing.lg)) {
-                    qrCard(Modifier)
+                Column(Modifier.widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(Spacing.xl)) {
+                    pass(Modifier)
                     DetailsCard(student, onReRegister, onDeleteData)
                 }
             } else {
                 Row(Modifier.widthIn(max = 1100.dp), horizontalArrangement = Arrangement.spacedBy(Spacing.xl)) {
-                    qrCard(Modifier.weight(1f))
+                    pass(Modifier.weight(1f))
                     Column(Modifier.weight(1f)) { DetailsCard(student, onReRegister, onDeleteData) }
                 }
             }
@@ -320,7 +335,7 @@ fun StudentHomeContent(
     if (confirmSignOut) {
         ConfirmDialog(
             title = "¿Salir de este dispositivo?",
-            message = "Dejarás de ver tu QR en esta pantalla. Tu registro y tu llave se conservan; vuelve con «Ya tengo registro».",
+            message = "Dejarás de ver tu pase en esta pantalla. Tu registro y tu llave se conservan; vuelve con «Ya tengo registro».",
             confirmText = "Salir",
             onConfirm = { confirmSignOut = false; onSignOut() },
             onDismiss = { confirmSignOut = false },
@@ -329,18 +344,33 @@ fun StudentHomeContent(
     }
 }
 
+/** Saludo alineado a la izquierda: el pase es el foco, no el avatar. */
 @Composable
-private fun ProfileHeader(name: String, matricula: String, student: Student?) {
-    Row(Modifier.fillMaxWidth().widthIn(max = 1100.dp), verticalAlignment = Alignment.CenterVertically) {
-        InitialsAvatar(name, size = 60.dp)
-        Spacer(Modifier.width(Spacing.lg))
-        Column(Modifier.weight(1f)) {
-            Text("Hola, ${name.substringBefore(' ')}", style = MaterialTheme.typography.headlineSmall)
-            Text(
-                listOfNotNull(matricula, student?.carrera?.takeIf { it.isNotBlank() }).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+private fun Greeting(name: String) {
+    Column(Modifier.fillMaxWidth().widthIn(max = 1100.dp)) {
+        Text("Hola, ${name.substringBefore(' ')}", style = MaterialTheme.typography.headlineLarge)
+        Text(
+            "Tu pase se renueva solo.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun QrModeSwitch(tab: StudentQrTab, onTab: (StudentQrTab) -> Unit) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        StudentQrTab.entries.forEachIndexed { index, t ->
+            SegmentedButton(
+                selected = tab == t,
+                onClick = { onTab(t) },
+                shape = SegmentedButtonDefaults.itemShape(index, StudentQrTab.entries.size),
+                // La selección usa el color protagonista (terracota), no el acento.
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            ) { Text(t.label, style = MaterialTheme.typography.labelLarge) }
         }
     }
 }
@@ -350,7 +380,7 @@ private fun MissingKeyCard(onReRegister: () -> Unit, modifier: Modifier = Modifi
     AppCard(modifier.fillMaxWidth()) {
         AlertBanner(
             title = "Este teléfono no tiene tu llave segura",
-            message = "Puede pasar si borraste los datos de la app o cambiaste de teléfono. Regístrate de nuevo y muestra tu nuevo QR de registro al guardia.",
+            message = "Pasa si borraste los datos de la app o cambiaste de teléfono. Regístrate de nuevo y muestra tu nuevo QR de registro al guardia.",
             tone = Tone.Warning,
             icon = Icons.Rounded.Key
         )
@@ -359,26 +389,26 @@ private fun MissingKeyCard(onReRegister: () -> Unit, modifier: Modifier = Modifi
     }
 }
 
+/**
+ * «Pase vivo» (DISEÑO.md §2): tarjeta tipo pase de abordar con el QR y la banda de horizonte
+ * que avanza con la cuenta regresiva y sigue la hora real de Juárez.
+ */
 @Composable
-fun QrCard(
+fun LivePass(
     student: Student?,
+    matricula: String,
     tab: StudentQrTab,
     registrationQr: ImageBitmap?,
     accessQr: QrUi?,
-    validitySec: Int,
-    onTab: (StudentQrTab) -> Unit,
+    nowMs: Long,
     onMarkApproved: () -> Unit,
-    onValidity: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val blocked = student?.status == StudentStatus.BAJA || student?.status == StudentStatus.SUSPENDIDO
-    AppCard(modifier.fillMaxWidth(), contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
-        TabRow(selectedTabIndex = tab.ordinal, containerColor = Color.Transparent) {
-            StudentQrTab.entries.forEach { t ->
-                Tab(selected = tab == t, onClick = { onTab(t) }, text = { Text(t.label, style = MaterialTheme.typography.titleSmall) })
-            }
-        }
-        Column(Modifier.padding(Spacing.lg), horizontalAlignment = Alignment.CenterHorizontally) {
+    PassCard(
+        modifier.fillMaxWidth(),
+        header = { PassHeader(student, matricula) },
+        body = {
             if (blocked) {
                 AlertBanner(
                     title = "Acceso bloqueado (${student?.status?.labelEs()})",
@@ -390,75 +420,89 @@ fun QrCard(
             }
             AnimatedContent(
                 targetState = tab,
-                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) },
-                label = "qrTab"
+                transitionSpec = { fadeIn(tween(Motion.STATE)) togetherWith fadeOut(tween(Motion.TAP)) },
+                label = "passMode"
             ) { t ->
                 when (t) {
-                    StudentQrTab.ACCESS -> AccessQrPane(accessQr, validitySec, onValidity)
+                    StudentQrTab.ACCESS -> AccessPassBody(accessQr, nowMs)
                     StudentQrTab.REGISTRATION -> RegistrationQrPane(student, registrationQr, onMarkApproved)
                 }
             }
         }
+    )
+}
+
+@Composable
+private fun PassHeader(student: Student?, matricula: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        BrandLogo(size = 22.dp)
+        Spacer(Modifier.width(Spacing.sm))
+        Text(
+            "${BrandConfig.INSTITUTION_SHORT} · PASE DE ENTRADA",
+            style = AppType.eyebrow,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        student?.status?.let { StatusPill(it.labelEs(), it.tone()) }
+    }
+    Spacer(Modifier.height(Spacing.md))
+    Text(
+        student?.nombre ?: matricula,
+        style = MaterialTheme.typography.headlineSmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis
+    )
+    Spacer(Modifier.height(Spacing.md))
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xl)) {
+        PassField("MATRÍCULA", matricula)
+        PassField("CARRERA", student?.carrera?.ifBlank { null } ?: "—", Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun PassField(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = AppType.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(Spacing.xxs))
+        Text(value, style = AppType.passValue, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
+private fun AccessPassBody(qr: QrUi?, nowMs: Long) {
+    val total = qr?.totalSeconds ?: SettingsRepository.STUDENT_QR_VALIDITY_SEC
+    val left = qr?.secondsLeft ?: total
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        QrImage(qr?.image, if (qr == null) "Generando tu código QR de acceso" else "Código QR de acceso, vence en $left segundos")
+        Spacer(Modifier.height(Spacing.md))
+        HorizonBand(
+            progress = horizonProgress(left, total),
+            phase = DayPhase.ofHour(TimeUtil.hourOfDay(nowMs)),
+            label = if (qr == null) "…" else formatLeft(left),
+            contentDescription = if (qr == null) "Generando tu pase" else "Pase vivo: se renueva en $left segundos"
+        )
+        Spacer(Modifier.height(Spacing.sm))
+        Text(
+            if (qr == null) "Generando tu pase…" else "Muéstralo al guardia o a la cámara del kiosco. Cada QR sirve una sola vez.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
 @Composable
 private fun QrImage(image: ImageBitmap?, description: String) {
     Box(
-        Modifier.fillMaxWidth(0.86f).widthIn(max = 320.dp).aspectRatio(1f)
-            .background(Color.White, MaterialTheme.shapes.large)
-            .padding(Spacing.md)
+        Modifier.fillMaxWidth(0.9f).widthIn(max = 320.dp).aspectRatio(1f)
+            // El QR siempre va sobre blanco puro para que cualquier cámara lo lea.
+            .background(Color.White, MaterialTheme.shapes.medium)
+            .padding(Spacing.sm)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center
     ) {
         if (image != null) Image(image, contentDescription = null, modifier = Modifier.fillMaxSize())
-        else Icon(Icons.Rounded.QrCode2, contentDescription = null, tint = Color(0xFFCBD5E1), modifier = Modifier.size(96.dp))
-    }
-}
-
-@Composable
-private fun AccessQrPane(qr: QrUi?, validitySec: Int, onValidity: (Int) -> Unit) {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        QrImage(qr?.image, "Código QR de acceso" + (qr?.let { ", vence en ${it.secondsLeft} segundos" } ?: ""))
-        Spacer(Modifier.height(Spacing.lg))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            CountdownRing(qr?.secondsLeft ?: validitySec, qr?.totalSeconds ?: validitySec, Modifier.size(56.dp))
-            Spacer(Modifier.width(Spacing.md))
-            Column {
-                Text(
-                    if (qr == null) "Generando tu QR…" else "Se renueva en ${formatLeft(qr.secondsLeft)}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    "Muéstralo al guardia o a la cámara del kiosco",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(Modifier.height(Spacing.lg))
-        HorizontalDivider(color = AppTheme.extended.cardBorder)
-        Spacer(Modifier.height(Spacing.md))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(Spacing.sm))
-            Text("Vigencia del QR", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            SettingsRepository.STUDENT_QR_VALIDITY_OPTIONS.forEach { sec ->
-                FilterChip(
-                    selected = sec == validitySec,
-                    onClick = { onValidity(sec) },
-                    label = { Text(SettingsRepository.validityLabel(sec)) }
-                )
-            }
-        }
-        Text(
-            "Cada QR sirve una sola vez y deja de funcionar al vencer.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth()
-        )
+        else Icon(Icons.Rounded.QrCode2, contentDescription = null, tint = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.size(96.dp))
     }
 }
 
@@ -475,13 +519,13 @@ private fun RegistrationQrPane(student: Student?, image: ImageBitmap?, onMarkApp
         QrImage(image, "Código QR de registro")
         Spacer(Modifier.height(Spacing.lg))
         Text(
-            if (approvedHere) "Tu acceso ya está activo." else "Pendiente: muéstrale este QR al guardia para activar tu acceso",
+            if (approvedHere) "Tu acceso ya está activo." else "Muéstrale este QR al guardia para activar tu pase",
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(Spacing.xs))
         Text(
-            "Solo se muestra una vez, en caseta. Contiene tus datos y tu llave pública; no permite entrar por sí solo.",
+            "Solo se muestra una vez, en caseta. Lleva tus datos y tu llave pública; por sí solo no deja entrar.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -492,24 +536,6 @@ private fun RegistrationQrPane(student: Student?, image: ImageBitmap?, onMarkApp
 }
 
 private fun formatLeft(sec: Int): String = if (sec < 60) "$sec s" else "%d:%02d min".format(sec / 60, sec % 60)
-
-/** Anillo de cuenta regresiva con el tiempo restante al centro. */
-@Composable
-fun CountdownRing(seconds: Int, total: Int, modifier: Modifier = Modifier, color: Color = MaterialTheme.colorScheme.primary, track: Color = MaterialTheme.colorScheme.surfaceContainerHighest, textColor: Color = MaterialTheme.colorScheme.onSurface) {
-    val ext = AppTheme.extended
-    val fraction by animateFloatAsState(seconds / total.coerceAtLeast(1).toFloat(), tween(900), label = "ring")
-    val ringColor = if (seconds <= 5) ext.warning else color
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val sw = size.minDimension * 0.1f
-            val tl = androidx.compose.ui.geometry.Offset(sw / 2, sw / 2)
-            val sz = androidx.compose.ui.geometry.Size(size.width - sw, size.height - sw)
-            drawArc(track, 0f, 360f, false, style = Stroke(sw), topLeft = tl, size = sz)
-            drawArc(ringColor, -90f, 360f * fraction, false, style = Stroke(sw, cap = StrokeCap.Round), topLeft = tl, size = sz)
-        }
-        Text(if (seconds >= 100) "${(seconds + 59) / 60}m" else "$seconds", style = MaterialTheme.typography.titleMedium, color = textColor)
-    }
-}
 
 @Composable
 private fun DetailsCard(student: Student?, onReRegister: () -> Unit, onDeleteData: () -> Unit) {

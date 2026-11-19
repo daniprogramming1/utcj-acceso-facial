@@ -27,7 +27,9 @@ data class RegistrationUi(
     val step: RegStep = RegStep.DATA,
     val matricula: String = "",
     val nombre: String = "",
+    /** Carrera elegida de la lista (o escrita en «Otra carrera…»), sin el grupo. */
     val carrera: String = "",
+    val grupo: String = "",
     val correo: String = "",
     val showErrors: Boolean = false,
     val consentAccepted: Boolean = false,
@@ -38,9 +40,23 @@ data class RegistrationUi(
     val error: String? = null,
     val savedStatus: StudentStatus? = null
 ) {
-    val matriculaError: String? get() = if (showErrors) RegistrationValidator.matriculaError(matricula) else null
+    /**
+     * Validación en vivo: el error aparece mientras escribe, salvo «demasiado corta», que solo se
+     * muestra al intentar continuar (no se regaña a quien va a la mitad).
+     */
+    val matriculaError: String? get() = when {
+        showErrors -> RegistrationValidator.matriculaError(matricula)
+        matricula.isBlank() -> null
+        else -> RegistrationValidator.matriculaError(matricula)
+            .takeUnless { it == RegistrationValidator.MATRICULA_TOO_SHORT }
+    }
     val nombreError: String? get() = if (showErrors) RegistrationValidator.nombreError(nombre) else null
+    val grupoError: String? get() =
+        if (showErrors || grupo.length >= 2) RegistrationValidator.grupoError(grupo) else null
     val correoError: String? get() = if (showErrors) RegistrationValidator.correoError(correo) else null
+
+    /** Lo que se guarda en `Student.carrera`. */
+    val carreraCompleta: String get() = RegistrationValidator.joinCarrera(carrera, grupo)
 }
 
 @HiltViewModel
@@ -59,7 +75,10 @@ class RegistrationViewModel @Inject constructor(
             val s = settings.getRememberedStudent()?.let { students.get(it) } ?: return@launch
             _ui.update {
                 if (it.matricula.isNotEmpty()) it
-                else it.copy(matricula = s.matricula, nombre = s.nombre, carrera = s.carrera, correo = s.correo.orEmpty())
+                else {
+                    val (carrera, grupo) = RegistrationValidator.splitCarrera(s.carrera)
+                    it.copy(matricula = s.matricula, nombre = s.nombre, carrera = carrera, grupo = grupo, correo = s.correo.orEmpty())
+                }
             }
         }
     }
@@ -67,6 +86,7 @@ class RegistrationViewModel @Inject constructor(
     fun onMatricula(v: String) = _ui.update { it.copy(matricula = v.take(RegistrationValidator.MATRICULA_MAX + 5)) }
     fun onNombre(v: String) = _ui.update { it.copy(nombre = v.take(80)) }
     fun onCarrera(v: String) = _ui.update { it.copy(carrera = v.take(60)) }
+    fun onGrupo(v: String) = _ui.update { it.copy(grupo = v.take(4)) }
     fun onCorreo(v: String) = _ui.update { it.copy(correo = v.take(80).trim()) }
     fun onConsent(v: Boolean) = _ui.update { it.copy(consentAccepted = v) }
 
@@ -75,7 +95,10 @@ class RegistrationViewModel @Inject constructor(
         val s = _ui.value
         when (s.step) {
             RegStep.DATA -> {
-                if (!RegistrationValidator.isValid(s.matricula, s.nombre) || RegistrationValidator.correoError(s.correo) != null) {
+                if (!RegistrationValidator.isValid(s.matricula, s.nombre) ||
+                    RegistrationValidator.correoError(s.correo) != null ||
+                    RegistrationValidator.grupoError(s.grupo) != null
+                ) {
                     _ui.update { it.copy(showErrors = true) }
                     return
                 }
@@ -109,7 +132,7 @@ class RegistrationViewModel @Inject constructor(
                     keys.getOrCreate(s.matricula).publicKey
                 }
                 val saved = students.registerWithConsent(
-                    s.matricula, s.nombre.trim(), s.carrera.trim(), s.correo.ifBlank { null }, publicKey
+                    s.matricula, s.nombre.trim(), s.carreraCompleta, s.correo.ifBlank { null }, publicKey
                 )
                 settings.setStudentMarkedApproved(false)
                 settings.setRememberedStudent(s.matricula)

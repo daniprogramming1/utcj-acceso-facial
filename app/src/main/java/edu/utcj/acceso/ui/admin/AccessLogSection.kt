@@ -5,7 +5,15 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.ui.text.style.TextOverflow
+import edu.utcj.acceso.ui.components.PrimaryButton
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -136,6 +144,34 @@ fun filterEvents(events: List<AccessEvent>, query: String): List<AccessEvent> {
     }
 }
 
+/**
+ * Fila de la bitácora: un evento, o varios rechazos seguidos del mismo alumno con el mismo motivo
+ * (p. ej. alguien que insiste con un QR vencido). [latest] es el más reciente.
+ */
+data class LogEntry(val latest: AccessEvent, val count: Int = 1, val earliestMs: Long = latest.datetimeMs)
+
+/**
+ * Junta rechazos consecutivos (lista ordenada desc.) del mismo alumno con el mismo motivo para que
+ * los intentos repetidos no empujen fuera de la pantalla al resto de la fila. Los permitidos nunca
+ * se agrupan: cada entrada cuenta.
+ */
+fun groupConsecutiveDenials(events: List<AccessEvent>): List<LogEntry> {
+    val out = mutableListOf<LogEntry>()
+    for (e in events) {
+        val last = out.lastOrNull()?.latest
+        val sameRun = last != null &&
+            e.result == AccessResult.DENIED && last.result == AccessResult.DENIED &&
+            e.matricula == last.matricula && e.reason == last.reason
+        if (sameRun) {
+            val g = out.last()
+            out[out.lastIndex] = g.copy(count = g.count + 1, earliestMs = e.datetimeMs)
+        } else {
+            out += LogEntry(e)
+        }
+    }
+    return out
+}
+
 /** Agrupa eventos (ya ordenados desc.) por día: «Hoy», «Ayer», «lun 5 oct»… */
 fun groupByDay(events: List<AccessEvent>, nowMs: Long): List<Pair<String, List<AccessEvent>>> =
     events.groupBy { TimeUtil.startOfDayMs(it.datetimeMs) }
@@ -235,6 +271,7 @@ fun AccessLogContent(
 ) {
     var menu by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf(false) }
+    var filters by remember { mutableStateOf(false) }
     var detail by remember { mutableStateOf<AccessEvent?>(null) }
     SectionScaffold(
         title = "Bitácora",
@@ -263,15 +300,19 @@ fun AccessLogContent(
                 AppSearchField(ui.query, onQuery, "Buscar nombre o matrícula", Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(Spacing.sm))
-            val rangeOptions: List<LogRange?> = LogRange.presets + listOf(null)
-            FilterRow(
-                options = rangeOptions,
-                selected = if (ui.range is LogRange.Custom) null else ui.range,
-                label = { it?.label ?: (ui.range as? LogRange.Custom)?.label ?: "Personalizado…" },
-                onSelect = { if (it == null) picker = true else onRange(it) }
-            )
-            Spacer(Modifier.height(Spacing.xs))
-            FilterRow(LogResultFilter.entries, ui.result, { it.label }, onResult)
+            // Un solo control con el resumen de los filtros activos (antes: dos filas de chips cortadas).
+            FilledTonalButton(
+                onClick = { filters = true },
+                modifier = Modifier.padding(horizontal = Spacing.screenCompact).fillMaxWidth()
+            ) {
+                Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(Spacing.sm))
+                Text(
+                    "Filtros · ${ui.range.label} · ${ui.result.label}",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Spacer(Modifier.height(Spacing.sm))
             Row(Modifier.padding(horizontal = Spacing.screenCompact), horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                 StatusPill("${ui.allowedCount} permitidos", Tone.Success)
@@ -281,24 +322,35 @@ fun AccessLogContent(
             when {
                 ui.loading -> SkeletonList(modifier = Modifier.padding(horizontal = Spacing.screenCompact))
                 ui.events.isEmpty() -> EmptyState(
-                    "Sin registros",
-                    "No hay accesos para este periodo y filtros. Prueba con «7 días» o «Todo».",
+                    if (ui.query.isBlank()) "Nadie ha cruzado" else "Sin coincidencias",
+                    if (ui.query.isBlank()) "La caseta está tranquila en este periodo. Prueba con «7 días» o «Todo» en Filtros."
+                    else "Nadie con «${ui.query}» en este periodo. Revisa la matrícula o amplía el periodo.",
                     modifier = Modifier.fillMaxSize()
                 )
                 else -> LazyColumn(contentPadding = PaddingValues(bottom = Spacing.xxl)) {
                     groupByDay(ui.events, ui.nowMs).forEach { (header, list) ->
                         stickyHeaderCompat(header)
-                        items(list, key = { it.id }) { e ->
+                        items(groupConsecutiveDenials(list), key = { it.latest.id }) { entry ->
+                            val e = entry.latest
                             AppListItem(
                                 title = e.nombre,
-                                subtitle = "${e.matricula} · ${e.method.labelEs()}${e.reason?.let { " · $it" } ?: ""}",
+                                subtitle = "${e.matricula} · ${e.method.labelEs()}",
+                                // El motivo es lo importante de un rechazo: va en su propia línea.
+                                supporting = when {
+                                    entry.count > 1 -> "${entry.count} intentos · ${e.reason ?: "Denegado"}"
+                                    else -> e.reason
+                                },
                                 leading = { IconBadge(e.method.icon(), e.result.tone()) },
                                 trailing = {
                                     Column(horizontalAlignment = Alignment.End) {
                                         AccessResultChip(e.result)
                                         Spacer(Modifier.height(2.dp))
-                                        Text(TimeUtil.formatTime(e.datetimeMs), style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(
+                                            if (entry.count > 1) "${TimeUtil.formatTime(entry.earliestMs)}–${TimeUtil.formatTime(e.datetimeMs)}"
+                                            else TimeUtil.formatTime(e.datetimeMs),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
                                 },
                                 onClick = { detail = e },
@@ -306,6 +358,36 @@ fun AccessLogContent(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+
+    if (filters) {
+        ModalBottomSheet(onDismissRequest = { filters = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+            Column(Modifier.padding(horizontal = Spacing.xl).navigationBarsPadding().padding(bottom = Spacing.xl)) {
+                Text("Filtros", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(Spacing.lg))
+                Text("Periodo", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(Spacing.sm))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    LogRange.presets.forEach { r -> SheetChip(r.label, ui.range == r) { onRange(r) } }
+                    SheetChip((ui.range as? LogRange.Custom)?.label ?: "Personalizado…", ui.range is LogRange.Custom) {
+                        filters = false
+                        picker = true
+                    }
+                }
+                Spacer(Modifier.height(Spacing.lg))
+                Text("Resultado", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(Spacing.sm))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    LogResultFilter.entries.forEach { f -> SheetChip(f.label, ui.result == f) { onResult(f) } }
+                }
+                Spacer(Modifier.height(Spacing.xl))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { onRange(LogRange.Today); onResult(LogResultFilter.ALL) }) { Text("Restablecer") }
+                    Spacer(Modifier.weight(1f))
+                    PrimaryButton("Ver ${ui.events.size} registros", onClick = { filters = false })
                 }
             }
         }
@@ -369,6 +451,18 @@ fun AccessLogContent(
             }
         }
     }
+}
+
+@Composable
+private fun SheetChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        leadingIcon = if (selected) {
+            { Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(18.dp)) }
+        } else null
+    )
 }
 
 /** Encabezado de día dentro de la lista. */

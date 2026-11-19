@@ -39,7 +39,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
 import edu.utcj.acceso.ui.components.AlertBanner
+import edu.utcj.acceso.ui.components.AnimatedPerforation
+import edu.utcj.acceso.ui.components.laneSweep
 import edu.utcj.acceso.ui.components.AppCard
 import edu.utcj.acceso.ui.components.DetailRow
 import edu.utcj.acceso.ui.components.IconBadge
@@ -60,15 +63,23 @@ import edu.utcj.acceso.util.TimeUtil
 @Composable
 fun AccessVerdictBanner(allowed: Boolean, reason: String?, modifier: Modifier = Modifier) {
     val c = toneColors(if (allowed) Tone.Success else Tone.Danger)
+    // Texto sobre el acento: blanco en claro, oscuro en el tema oscuro (verde/rojo brillantes).
+    val ext = AppTheme.extended
+    val onAccent = if (allowed) ext.onSuccess else ext.onDanger
     Row(
-        modifier.fillMaxWidth().background(c.accent, MaterialTheme.shapes.large).padding(Spacing.lg)
+        modifier.fillMaxWidth()
+            .clip(MaterialTheme.shapes.large)
+            .background(c.accent)
+            // «Carril verde»: la luz sube una vez al permitir.
+            .laneSweep(key = allowed, color = onAccent, enabled = allowed)
+            .padding(Spacing.lg)
             .semantics { liveRegion = LiveRegionMode.Assertive },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             if (allowed) Icons.Rounded.CheckCircle else Icons.Rounded.Cancel,
             contentDescription = null,
-            tint = androidx.compose.ui.graphics.Color.White,
+            tint = onAccent,
             modifier = Modifier.size(40.dp)
         )
         Spacer(Modifier.width(Spacing.md))
@@ -76,20 +87,25 @@ fun AccessVerdictBanner(allowed: Boolean, reason: String?, modifier: Modifier = 
             Text(
                 if (allowed) "Acceso permitido" else "Acceso denegado",
                 style = MaterialTheme.typography.headlineSmall,
-                color = androidx.compose.ui.graphics.Color.White
+                color = onAccent
             )
             reason?.let {
-                Text(it, style = MaterialTheme.typography.titleMedium, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f))
+                Text(it, style = MaterialTheme.typography.titleMedium, color = onAccent.copy(alpha = 0.92f))
             }
         }
     }
 }
 
-/** Tarjeta del alumno tras escanear su QR de acceso. */
+/**
+ * Tarjeta del alumno tras escanear su QR de acceso.
+ *
+ * @param undoSecondsLeft si no es nulo, el acceso es válido y se registrará solo en ese tiempo;
+ *   el guardia puede tocar «No permitir» antes.
+ */
 @Composable
 fun StudentScanCard(
     card: ScanCardModel,
-    awaitingGuard: Boolean,
+    undoSecondsLeft: Int?,
     onRegisterEntry: () -> Unit,
     onDeny: () -> Unit,
     onScanAnother: () -> Unit,
@@ -98,7 +114,16 @@ fun StudentScanCard(
 ) {
     AppCard(modifier.fillMaxWidth()) {
         AccessVerdictBanner(card.allowed, card.reasonTitle)
-        Spacer(Modifier.height(Spacing.lg))
+        if (card.allowed) {
+            // El pase quedó «perforado»: ya se usó.
+            AnimatedPerforation(
+                key = card,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                modifier = Modifier.fillMaxWidth().height(Spacing.xl)
+            )
+        } else {
+            Spacer(Modifier.height(Spacing.lg))
+        }
         if (card.known) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 InitialsAvatar(card.nombre, size = 80.dp)
@@ -125,10 +150,17 @@ fun StudentScanCard(
             Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(Spacing.lg))
-        if (awaitingGuard) {
-            PrimaryButton("Registrar entrada", onClick = onRegisterEntry, icon = Icons.AutoMirrored.Rounded.Login, modifier = Modifier.fillMaxWidth())
+        if (undoSecondsLeft != null) {
+            Text(
+                "Se registra sola en $undoSecondsLeft s, o al escanear al siguiente. Si algo no cuadra, no la dejes pasar.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Sin liveRegion: TalkBack lo leería cada segundo; la franja ya anunció el resultado.
+            )
+            Spacer(Modifier.height(Spacing.md))
+            SecondaryButton("No permitir · $undoSecondsLeft s", onClick = onDeny, icon = Icons.Rounded.Block, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(Spacing.sm))
-            SecondaryButton("No permitir", onClick = onDeny, icon = Icons.Rounded.Block, modifier = Modifier.fillMaxWidth())
+            PrimaryButton("Registrar entrada", onClick = onRegisterEntry, icon = Icons.AutoMirrored.Rounded.Login, modifier = Modifier.fillMaxWidth())
         } else {
             PrimaryButton("Escanear otro", onClick = onScanAnother, icon = Icons.Rounded.QrCodeScanner, modifier = Modifier.fillMaxWidth())
             if (card.known && onManualEntry != null) {

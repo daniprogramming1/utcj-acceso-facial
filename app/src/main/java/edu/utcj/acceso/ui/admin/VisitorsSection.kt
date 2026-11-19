@@ -119,7 +119,7 @@ fun VisitorsContent(
             if (list.isEmpty()) {
                 EmptyState(
                     if (tab == 0) "No hay visitantes dentro" else "Sin visitas registradas",
-                    "Registra a cada visitante al llegar y marca su salida al irse.",
+                    "Anota a cada visita al llegar y márcale la salida al irse: así sabes quién sigue dentro.",
                     modifier = Modifier.fillMaxSize()
                 )
             } else {

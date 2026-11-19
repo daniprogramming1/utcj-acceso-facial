@@ -2,10 +2,6 @@ package edu.utcj.acceso.ui.kiosk
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.media.AudioManager
-import android.media.ToneGenerator
-import android.os.Build
-import android.view.HapticFeedbackConstants
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
@@ -75,17 +71,20 @@ import edu.utcj.acceso.ui.components.GuidanceChip
 import edu.utcj.acceso.ui.components.QrScannerCamera
 import edu.utcj.acceso.ui.components.ScanFrameOverlay
 import edu.utcj.acceso.ui.components.SyncStatusPill
+import edu.utcj.acceso.ui.components.rememberScanFeedback
 import edu.utcj.acceso.ui.theme.KioskType
+import edu.utcj.acceso.ui.theme.SandText
 import edu.utcj.acceso.ui.theme.Spacing
 import edu.utcj.acceso.util.TimeUtil
 import kotlinx.coroutines.delay
 
 /** Colores fijos del kiosco (siempre oscuro para alto contraste en vestíbulos). */
+/** Kiosco: noche del desierto con texto arena, alto contraste para leerse desde la fila. */
 internal object KioskColors {
-    val background = Color(0xFF07152A)
-    val panel = Color(0xFF0D213D)
-    val panelBorder = Color.White.copy(alpha = 0.08f)
-    val textSecondary = Color.White.copy(alpha = 0.72f)
+    val background = Color(0xFF0D1122)
+    val panel = Color(0xFF1B2238)
+    val panelBorder = SandText.copy(alpha = 0.10f)
+    val textSecondary = SandText.copy(alpha = 0.78f)
 }
 
 @Composable
@@ -95,7 +94,6 @@ fun KioskScreen(
 ) {
     val state by vm.ui.collectAsStateWithLifecycle()
     val sync by vm.sync.collectAsStateWithLifecycle()
-    val view = LocalView.current
 
     KioskWindowEffect(vm.orientation)
     DisposableEffect(vm) {
@@ -116,17 +114,10 @@ fun KioskScreen(
     // Resultado: háptica, sonido y regreso automático
     val totalSeconds = (vm.idleMs / 1000L).toInt().coerceAtLeast(1)
     var secondsLeft by remember { mutableIntStateOf(totalSeconds) }
-    val tone = remember { runCatching { ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80) }.getOrNull() }
-    DisposableEffect(Unit) { onDispose { tone?.release() } }
+    val feedback = rememberScanFeedback(vm.soundEnabled)
     LaunchedEffect(state.result) {
         val r = state.result ?: return@LaunchedEffect
-        val feedback = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (r.allowed) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.REJECT
-        } else HapticFeedbackConstants.LONG_PRESS
-        view.performHapticFeedback(feedback)
-        if (vm.soundEnabled) {
-            tone?.startTone(if (r.allowed) ToneGenerator.TONE_PROP_ACK else ToneGenerator.TONE_PROP_NACK, 220)
-        }
+        feedback(r.allowed)
         secondsLeft = totalSeconds
         while (secondsLeft > 0) {
             delay(1_000)
