@@ -28,13 +28,19 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -42,6 +48,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
@@ -50,6 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import edu.utcj.acceso.brand.BrandConfig
 import edu.utcj.acceso.domain.model.StudentStatus
 import edu.utcj.acceso.ui.components.AccesoTopBar
 import edu.utcj.acceso.ui.components.AlertBanner
@@ -63,6 +73,7 @@ import edu.utcj.acceso.ui.components.StatusPill
 import edu.utcj.acceso.ui.components.StepIndicator
 import edu.utcj.acceso.ui.components.Tone
 import edu.utcj.acceso.ui.components.labelEs
+import edu.utcj.acceso.ui.theme.AppShapes
 import edu.utcj.acceso.ui.theme.AppTheme
 import edu.utcj.acceso.ui.theme.Motion
 import edu.utcj.acceso.ui.theme.Spacing
@@ -85,6 +96,7 @@ fun RegistrationScreen(
         onMatricula = vm::onMatricula,
         onNombre = vm::onNombre,
         onCarrera = vm::onCarrera,
+        onGrupo = vm::onGrupo,
         onCorreo = vm::onCorreo,
         onConsent = vm::onConsent,
         onNext = vm::next,
@@ -101,6 +113,7 @@ fun RegistrationContent(
     onMatricula: (String) -> Unit,
     onNombre: (String) -> Unit,
     onCarrera: (String) -> Unit,
+    onGrupo: (String) -> Unit,
     onCorreo: (String) -> Unit,
     onConsent: (Boolean) -> Unit,
     onNext: () -> Unit,
@@ -137,7 +150,7 @@ fun RegistrationContent(
                 modifier = Modifier.weight(1f)
             ) { step ->
                 when (step) {
-                    RegStep.DATA -> DataStep(state, onMatricula, onNombre, onCarrera, onCorreo, onNext)
+                    RegStep.DATA -> DataStep(state, onMatricula, onNombre, onCarrera, onGrupo, onCorreo, onNext)
                     RegStep.CONSENT -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                         CenteredColumn {
                             ExistingBanner(state.existingStatus)
@@ -184,6 +197,7 @@ private fun DataStep(
     onMatricula: (String) -> Unit,
     onNombre: (String) -> Unit,
     onCarrera: (String) -> Unit,
+    onGrupo: (String) -> Unit,
     onCorreo: (String) -> Unit,
     onNext: () -> Unit
 ) {
@@ -199,7 +213,8 @@ private fun DataStep(
             Spacer(Modifier.height(Spacing.xl))
             AppTextField(
                 value = state.matricula, onValueChange = onMatricula, label = "Matrícula",
-                leadingIcon = Icons.Rounded.Badge, keyboardType = KeyboardType.Ascii,
+                leadingIcon = Icons.Rounded.Badge,
+                keyboardType = if (BrandConfig.MATRICULA_NUMERIC) KeyboardType.Number else KeyboardType.Ascii,
                 isError = state.matriculaError != null,
                 supportingText = state.matriculaError ?: "Ejemplo: 20210001"
             )
@@ -211,9 +226,13 @@ private fun DataStep(
                 supportingText = state.nombreError
             )
             Spacer(Modifier.height(Spacing.sm))
+            CarreraPicker(state.carrera, onCarrera)
+            Spacer(Modifier.height(Spacing.sm))
             AppTextField(
-                value = state.carrera, onValueChange = onCarrera, label = "Carrera y grupo",
-                leadingIcon = Icons.Rounded.School, supportingText = "Ejemplo: TI · 5A"
+                value = state.grupo, onValueChange = onGrupo, label = "Grupo (opcional)",
+                leadingIcon = Icons.Rounded.Groups,
+                isError = state.grupoError != null,
+                supportingText = state.grupoError ?: "Ejemplo: 5A"
             )
             Spacer(Modifier.height(Spacing.sm))
             AppTextField(
@@ -232,6 +251,42 @@ private fun DataStep(
             )
             Spacer(Modifier.height(Spacing.lg))
         }
+    }
+}
+
+private const val OTHER_CARRERA = "Otra carrera…"
+
+/**
+ * Carrera de una lista (BrandConfig.CARRERAS) para que los datos coincidan con el CSV
+ * institucional y se puedan filtrar; «Otra carrera…» abre un campo libre.
+ */
+@Composable
+private fun CarreraPicker(carrera: String, onCarrera: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var other by remember { mutableStateOf(carrera.isNotBlank() && carrera !in BrandConfig.CARRERAS) }
+    ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {
+        OutlinedTextField(
+            value = if (other) OTHER_CARRERA else carrera,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Carrera") },
+            placeholder = { Text("Elige tu carrera") },
+            leadingIcon = { Icon(Icons.Rounded.School, contentDescription = null) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = open) },
+            shape = AppShapes.field,
+            singleLine = true,
+            modifier = Modifier.menuAnchor().fillMaxWidth()
+        )
+        ExposedDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            BrandConfig.CARRERAS.forEach { c ->
+                DropdownMenuItem(text = { Text(c) }, onClick = { other = false; onCarrera(c); open = false })
+            }
+            DropdownMenuItem(text = { Text(OTHER_CARRERA) }, onClick = { other = true; onCarrera(""); open = false })
+        }
+    }
+    if (other) {
+        Spacer(Modifier.height(Spacing.sm))
+        AppTextField(value = carrera, onValueChange = onCarrera, label = "¿Cuál carrera?", leadingIcon = Icons.Rounded.Edit)
     }
 }
 

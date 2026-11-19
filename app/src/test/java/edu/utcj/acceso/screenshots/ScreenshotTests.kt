@@ -121,7 +121,7 @@ class ScreenshotTests {
                 carrera = "Ingeniería en Software · 5A",
                 consentAccepted = true
             ),
-            onMatricula = {}, onNombre = {}, onCarrera = {}, onCorreo = {}, onConsent = {}, onNext = {}, onBack = {},
+            onMatricula = {}, onNombre = {}, onCarrera = {}, onGrupo = {}, onCorreo = {}, onConsent = {}, onNext = {}, onBack = {},
             onGoHome = {}, onFinish = {}, onDeleteData = {}
         )
     }
@@ -131,9 +131,9 @@ class ScreenshotTests {
         RegistrationContent(
             state = RegistrationUi(
                 step = RegStep.DATA, matricula = "20231045", nombre = "Ana Sofía López",
-                carrera = "Ingeniería en Software · 5A", correo = "ana.lopez@utcj.edu.mx"
+                carrera = "Ingeniería en Software", grupo = "5A", correo = "ana.lopez@utcj.edu.mx"
             ),
-            onMatricula = {}, onNombre = {}, onCarrera = {}, onCorreo = {}, onConsent = {}, onNext = {}, onBack = {},
+            onMatricula = {}, onNombre = {}, onCarrera = {}, onGrupo = {}, onCorreo = {}, onConsent = {}, onNext = {}, onBack = {},
             onGoHome = {}, onFinish = {}, onDeleteData = {}
         )
     }
@@ -144,17 +144,19 @@ class ScreenshotTests {
         createdAtMs = TestTime.at(2026, 9, 1, 9), correo = "ana.lopez@utcj.edu.mx", hasQrKey = true
     )
 
+    /** Pase vivo a las 7:42 (amanecer en Juárez), con 42 s restantes. */
     @Test
     fun s04_studentAccessQr() = shot("04-alumno-qr-acceso") {
         StudentHomeContent(
             matricula = "20231045",
-            student = ana,
+            student = ana.copy(status = StudentStatus.APPROVED),
             hasKey = true,
             tab = StudentQrTab.ACCESS,
             registrationQr = null,
             accessQr = QrUi(QrRenderer.render(DEMO_ACCESS_QR).asImageBitmap(), 42, 60),
-            validitySec = 60,
-            onTab = {}, onMarkApproved = {}, onValidity = {},
+            registrationDone = true,
+            nowMs = TestTime.at(2026, 10, 8, 7, 42),
+            onTab = {}, onMarkApproved = {},
             onBack = {}, onReRegister = {}, onDeleteData = {}, onSignOut = {}
         )
     }
@@ -168,8 +170,26 @@ class ScreenshotTests {
             tab = StudentQrTab.REGISTRATION,
             registrationQr = QrRenderer.render(DEMO_REGISTRATION_QR).asImageBitmap(),
             accessQr = null,
-            validitySec = 60,
-            onTab = {}, onMarkApproved = {}, onValidity = {},
+            registrationDone = false,
+            nowMs = TestTime.at(2026, 10, 8, 7, 42),
+            onTab = {}, onMarkApproved = {},
+            onBack = {}, onReRegister = {}, onDeleteData = {}, onSignOut = {}
+        )
+    }
+
+    /** Pase vivo de noche (21:15) en tema oscuro: el cielo cambia con la hora real. */
+    @Test
+    fun s04c_studentAccessQrNight() = shot("04c-alumno-pase-noche", dark = true) {
+        StudentHomeContent(
+            matricula = "20231045",
+            student = ana.copy(status = StudentStatus.APPROVED),
+            hasKey = true,
+            tab = StudentQrTab.ACCESS,
+            registrationQr = null,
+            accessQr = QrUi(QrRenderer.render(DEMO_ACCESS_QR).asImageBitmap(), 12, 60),
+            registrationDone = true,
+            nowMs = TestTime.at(2026, 10, 8, 21, 15),
+            onTab = {}, onMarkApproved = {},
             onBack = {}, onReRegister = {}, onDeleteData = {}, onSignOut = {}
         )
     }
@@ -300,7 +320,7 @@ class ScreenshotTests {
     private val deniedCard = ScanCardModel(
         allowed = false, nombre = "Luis Ramírez Torres", matricula = "20220311",
         carrera = "Redes y Telecomunicaciones", status = StudentStatus.BAJA,
-        reasonTitle = DenialReason.BAJA.labelEs, reasonDetail = DenialReason.BAJA.detailEs,
+        reasonTitle = DenialReason.BAJA.labelEs, reasonDetail = DenialReason.BAJA.detailEs, reason = DenialReason.BAJA,
         timeMs = TestTime.at(2026, 10, 8, 7, 44)
     )
 
@@ -318,7 +338,7 @@ class ScreenshotTests {
 
     @Test
     fun s14_guardScanAllowed() = shot("14-guardia-acceso-permitido", content = scan(
-        ScanUi(result = PanelScanResult.Access(allowedCard, awaitingGuard = true))
+        ScanUi(result = PanelScanResult.Access(allowedCard, undoSecondsLeft = 4))
     ))
 
     @Test
@@ -328,10 +348,10 @@ class ScreenshotTests {
                 ScanCardModel(
                     allowed = false, nombre = "María Fernanda Ruiz", matricula = "20240077",
                     carrera = "Negocios Internacionales", status = StudentStatus.APPROVED,
-                    reasonTitle = DenialReason.EXPIRED.labelEs, reasonDetail = DenialReason.EXPIRED.detailEs,
+                    reasonTitle = DenialReason.EXPIRED.labelEs, reasonDetail = DenialReason.EXPIRED.detailEs, reason = DenialReason.EXPIRED,
                     timeMs = TestTime.at(2026, 10, 8, 7, 51)
                 ),
-                awaitingGuard = false
+                undoSecondsLeft = null
             )
         )
     ))

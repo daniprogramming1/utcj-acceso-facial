@@ -12,8 +12,8 @@ import javax.inject.Singleton
  * App settings persisted in EncryptedSharedPreferences.
  *
  * ## Vigencia del QR de acceso
- * - Alumno: [KEY_STUDENT_QR_VALIDITY] (por defecto [DEFAULT_STUDENT_QR_VALIDITY_SEC] = 60 s;
- *   opciones [STUDENT_QR_VALIDITY_OPTIONS]). Se cambia en «Mi acceso» → «Vigencia del QR».
+ * - Alumno: fija en [STUDENT_QR_VALIDITY_SEC] = 60 s. El alumno ya no la elige: la vigencia
+ *   es una decisión de seguridad (si pudiera elegir, siempre escogería la máxima).
  * - Guardia: [KEY_GUARD_MAX_QR_VALIDITY] (por defecto [DEFAULT_GUARD_MAX_QR_VALIDITY_SEC] = 5 min).
  *   Un QR que dure más que esto se rechaza. Se cambia en Configuración → «Acceso con QR».
  *
@@ -27,7 +27,6 @@ class SettingsRepository @Inject constructor(
     companion object {
         const val KEY_HOURS_START = "access_hours_start"
         const val KEY_HOURS_END = "access_hours_end"
-        const val KEY_STUDENT_QR_VALIDITY = "student_qr_validity_sec"
         const val KEY_GUARD_MAX_QR_VALIDITY = "guard_max_qr_validity_sec"
         const val KEY_STUDENT_APPROVED_HINT = "student_marked_approved"
         const val KEY_KIOSK_IDLE_MS = "kiosk_idle_ms"
@@ -41,15 +40,17 @@ class SettingsRepository @Inject constructor(
         /** Tiempo que el resultado (verde/rojo) permanece en el kiosco antes de volver a la cámara. */
         const val DEFAULT_KIOSK_IDLE_MS = 10_000L
         val KIOSK_IDLE_OPTIONS_MS = listOf(5_000L, 10_000L, 15_000L, 30_000L)
-        const val DEFAULT_STUDENT_QR_VALIDITY_SEC = 60
-        val STUDENT_QR_VALIDITY_OPTIONS = listOf(30, 60, 120, 300)
+        /** Vigencia del QR de acceso que genera el teléfono del alumno. */
+        const val STUDENT_QR_VALIDITY_SEC = 60
         const val DEFAULT_GUARD_MAX_QR_VALIDITY_SEC = 300
         val GUARD_MAX_QR_VALIDITY_OPTIONS = listOf(30, 60, 120, 300)
 
         /** Claves de la versión facial (1.1.x) que se borran al actualizar. */
         val OBSOLETE_KEYS = listOf(
             "face_match_threshold", "use_legacy_face_embedding", "liveness_enabled",
-            "qr_hmac_secret", "min_face_samples", "max_face_samples"
+            "qr_hmac_secret", "min_face_samples", "max_face_samples",
+            // v1.2: el alumno elegía la vigencia de su QR; ahora es fija.
+            "student_qr_validity_sec"
         )
 
         /** «30 s», «1 min», «2 min»… */
@@ -79,8 +80,9 @@ class SettingsRepository @Inject constructor(
 
     fun setKioskOrientation(o: KioskOrientation) = securePrefs.putString(KEY_KIOSK_ORIENTATION, o.name)
 
-    fun isKioskSoundEnabled(): Boolean = securePrefs.getBoolean(KEY_KIOSK_SOUND, true)
-    fun setKioskSoundEnabled(enabled: Boolean) = securePrefs.putBoolean(KEY_KIOSK_SOUND, enabled)
+    /** Tono al permitir/denegar en el escáner del panel y en el kiosco (clave histórica `kiosk_sound`). */
+    fun isScanSoundEnabled(): Boolean = securePrefs.getBoolean(KEY_KIOSK_SOUND, true)
+    fun setScanSoundEnabled(enabled: Boolean) = securePrefs.putBoolean(KEY_KIOSK_SOUND, enabled)
 
     // ---- Experiencia de usuario ----
 
@@ -110,14 +112,6 @@ class SettingsRepository @Inject constructor(
     }
 
     // ---- QR de acceso ----
-
-    fun getStudentQrValiditySec(): Int =
-        securePrefs.getInt(KEY_STUDENT_QR_VALIDITY, DEFAULT_STUDENT_QR_VALIDITY_SEC)
-            .takeIf { it in STUDENT_QR_VALIDITY_OPTIONS } ?: DEFAULT_STUDENT_QR_VALIDITY_SEC
-
-    fun setStudentQrValiditySec(sec: Int) {
-        if (sec in STUDENT_QR_VALIDITY_OPTIONS) securePrefs.putInt(KEY_STUDENT_QR_VALIDITY, sec)
-    }
 
     fun getGuardMaxQrValiditySec(): Int =
         securePrefs.getInt(KEY_GUARD_MAX_QR_VALIDITY, DEFAULT_GUARD_MAX_QR_VALIDITY_SEC)

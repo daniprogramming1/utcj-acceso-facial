@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Colores de marca usados antes de Compose (splash, ventana). Mantener en sincronía con BrandConfig. -->
-    <color name="brand_primary">#FF00796B</color>
-    <color name="brand_secondary">#FF1D4ED8</color>
-    <color name="brand_navy">#FF0B1F3A</color>
-    <color name="window_background_light">#FFF7F9FB</color>
-    <color name="window_background_dark">#FF0B1220</color>
+    <color name="brand_primary">#FFC2410C</color>
+    <color name="brand_secondary">#FF00796B</color>
+    <color name="brand_navy">#FF141A2E</color>
+    <color name="window_background_light">#FFFBF7F2</color>
+    <color name="window_background_dark">#FF12131C</color>
     <!-- Fondo del splash nativo; values-night lo cambia al fondo oscuro -->
     <color name="splash_background">@color/window_background_light</color>
 </resources>

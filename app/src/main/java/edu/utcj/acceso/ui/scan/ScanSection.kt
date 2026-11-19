@@ -40,6 +40,7 @@ import edu.utcj.acceso.ui.components.GuidanceChip
 import edu.utcj.acceso.ui.components.QrScannerCamera
 import edu.utcj.acceso.ui.components.ScanFrameOverlay
 import edu.utcj.acceso.ui.components.Tone
+import edu.utcj.acceso.ui.components.rememberScanFeedback
 import edu.utcj.acceso.ui.theme.AppTheme
 import edu.utcj.acceso.ui.theme.Spacing
 
@@ -50,6 +51,15 @@ fun ScanSection(vm: ScanViewModel = hiltViewModel()) {
     val snackbar = remember { SnackbarHostState() }
     val actions = LocalAdminActions.current
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    // Vibración + tono una vez por resultado (no en cada tick de la cuenta regresiva).
+    val feedback = rememberScanFeedback(vm.soundEnabled)
+    LaunchedEffect(ui.result.verdictKey()) {
+        when (val r = ui.result) {
+            is PanelScanResult.Access -> feedback(r.card.allowed)
+            is PanelScanResult.Registration -> feedback(r.kind == PanelScanResult.Registration.Kind.READY)
+            null -> Unit
+        }
+    }
     DisposableEffect(vm) {
         vm.setActive(true)
         onDispose { vm.setActive(false) }
@@ -65,7 +75,8 @@ fun ScanSection(vm: ScanViewModel = hiltViewModel()) {
         onManualEntry = { actions.onManualEntry(it) },
         cameraContent = {
             CameraPermissionGate(onDark = true) {
-                QrScannerCamera(paused = ui.result != null, onCode = vm::onCode)
+                // Sigue leyendo durante la ventana de «No permitir»: el siguiente alumno no espera.
+                QrScannerCamera(paused = !ui.acceptsScans, onCode = vm::onCode)
             }
         }
     )
@@ -124,7 +135,8 @@ private fun ScannerViewport(ui: ScanUi, cameraContent: @Composable () -> Unit, m
     }
     Box(modifier.clip(shape).background(Color.Black)) {
         cameraContent()
-        ScanFrameOverlay(accent = accent, animate = ui.result == null)
+        ScanFrameOverlay(accent = accent, animate = ui.acceptsScans)
+        // Con un resultado el visor es bajo y la guía taparía el recuadro; el aviso va en la tarjeta.
         if (ui.result == null) {
             GuidanceChip(
                 if (ui.busy) "Verificando…" else "Coloca el QR dentro del recuadro",
@@ -134,6 +146,16 @@ private fun ScannerViewport(ui: ScanUi, cameraContent: @Composable () -> Unit, m
             )
         }
     }
+}
+
+/** La cámara sigue leyendo sin resultado o durante la ventana para deshacer una entrada. */
+private val ScanUi.acceptsScans: Boolean
+    get() = result == null || (result as? PanelScanResult.Access)?.undoSecondsLeft != null
+
+/** Identidad del resultado: cambia con cada escaneo, no con cada segundo de la cuenta regresiva. */
+private fun PanelScanResult?.verdictKey(): Any? = when (this) {
+    is PanelScanResult.Access -> card
+    else -> this
 }
 
 @Composable
@@ -151,13 +173,14 @@ private fun ResultPanel(
         AnimatedContent(
             targetState = ui.result,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
+            contentKey = { it.verdictKey() },
             label = "scanResult"
         ) { r ->
             when (r) {
                 null -> ScanIdleCard()
                 is PanelScanResult.Access -> StudentScanCard(
                     card = r.card,
-                    awaitingGuard = r.awaitingGuard,
+                    undoSecondsLeft = r.undoSecondsLeft,
                     onRegisterEntry = onRegisterEntry,
                     onDeny = onDeny,
                     onScanAnother = onDismiss,

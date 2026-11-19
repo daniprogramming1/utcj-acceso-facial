@@ -56,7 +56,7 @@ class KioskViewModel @Inject constructor(
 
     /** Ajustes del kiosco leídos al abrirlo. */
     val idleMs: Long = settings.getKioskIdleMs()
-    val soundEnabled: Boolean = settings.isKioskSoundEnabled()
+    val soundEnabled: Boolean = settings.isScanSoundEnabled()
     val orientation: SettingsRepository.KioskOrientation = settings.getKioskOrientation()
 
     private val _ui = MutableStateFlow(Ui())

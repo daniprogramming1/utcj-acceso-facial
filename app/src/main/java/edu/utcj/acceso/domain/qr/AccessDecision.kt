@@ -2,23 +2,28 @@ package edu.utcj.acceso.domain.qr
 
 import edu.utcj.acceso.domain.model.StudentStatus
 
-/** Motivos de rechazo de un QR, con el texto que verá el guardia / alumno. */
-enum class DenialReason(val labelEs: String, val detailEs: String) {
-    INVALID_QR("QR no válido", "El código no pertenece a Acceso UTCJ o está dañado."),
-    REGISTRATION_QR("QR de registro", "Este es el QR de registro. El guardia debe escanearlo en Aprobaciones."),
-    NOT_REGISTERED("Alumno no registrado", "La matrícula no está dada de alta en este equipo de seguridad."),
-    NO_KEY("Sin QR de registro", "El alumno aún no presenta su QR de registro en caseta."),
-    BAD_SIGNATURE("Firma inválida", "El QR no fue generado por el teléfono registrado del alumno."),
-    NOT_YET_VALID("Hora del QR inválida", "La hora del teléfono del alumno está adelantada. Pide que la ajuste."),
-    LIFETIME_TOO_LONG("Vigencia no permitida", "El QR dura más de lo permitido por seguridad. El alumno debe elegir una vigencia menor."),
-    EXPIRED("QR vencido", "Pide al alumno que muestre su QR actualizado."),
-    REUSED("QR ya usado", "Este QR ya se presentó antes. Cada QR solo sirve una vez."),
-    BAJA("Alumno dado de baja", "Su estatus institucional no permite el acceso."),
-    SUSPENDIDO("Alumno suspendido", "Su estatus institucional no permite el acceso."),
-    PENDING("Pendiente de aprobación", "Su registro aún no ha sido aprobado por seguridad."),
-    REJECTED("Registro rechazado", "Su registro fue rechazado por seguridad."),
-    OUT_OF_HOURS("Fuera de horario", "El acceso está fuera del horario permitido."),
-    DENIED_BY_GUARD("Denegado por el guardia", "El guardia decidió no permitir el acceso.")
+/**
+ * Motivos de rechazo de un QR, con el texto que verá el guardia / alumno.
+ *
+ * [kioskPublic]: el motivo trata del código (no de la persona) y se puede mostrar en la pantalla
+ * del kiosco, que ve toda la fila. Los motivos personales (estatus, registro) solo los ve el guardia.
+ */
+enum class DenialReason(val labelEs: String, val detailEs: String, val kioskPublic: Boolean) {
+    INVALID_QR("QR no válido", "El código no pertenece a Acceso UTCJ o está dañado.", kioskPublic = true),
+    REGISTRATION_QR("QR de registro", "Este es el QR de registro. El guardia debe escanearlo en Aprobaciones.", kioskPublic = true),
+    NOT_REGISTERED("Alumno no registrado", "La matrícula no está dada de alta en este equipo de seguridad.", kioskPublic = false),
+    NO_KEY("Sin QR de registro", "El alumno aún no presenta su QR de registro en caseta.", kioskPublic = false),
+    BAD_SIGNATURE("Firma inválida", "El QR no fue generado por el teléfono registrado del alumno.", kioskPublic = false),
+    NOT_YET_VALID("Hora del QR inválida", "La hora del teléfono del alumno está adelantada. Pide que la ajuste.", kioskPublic = true),
+    LIFETIME_TOO_LONG("Vigencia no permitida", "El QR dura más de lo permitido por seguridad. El alumno debe actualizar la app.", kioskPublic = true),
+    EXPIRED("QR vencido", "Pide al alumno que muestre su QR actualizado.", kioskPublic = true),
+    REUSED("QR ya usado", "Este QR ya se presentó antes. Cada QR solo sirve una vez.", kioskPublic = true),
+    BAJA("Alumno dado de baja", "Su estatus institucional no permite el acceso.", kioskPublic = false),
+    SUSPENDIDO("Alumno suspendido", "Su estatus institucional no permite el acceso.", kioskPublic = false),
+    PENDING("Pendiente de aprobación", "Su registro aún no ha sido aprobado por seguridad.", kioskPublic = false),
+    REJECTED("Registro rechazado", "Su registro fue rechazado por seguridad.", kioskPublic = false),
+    OUT_OF_HOURS("Fuera de horario", "El acceso está fuera del horario permitido.", kioskPublic = true),
+    DENIED_BY_GUARD("Denegado por el guardia", "El guardia decidió no permitir el acceso.", kioskPublic = false)
 }
 
 /** Datos del alumno guardados en el teléfono del guardia. */

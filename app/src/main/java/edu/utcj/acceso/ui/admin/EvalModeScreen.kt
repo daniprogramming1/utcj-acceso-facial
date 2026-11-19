@@ -33,6 +33,7 @@ import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import edu.utcj.acceso.data.local.EvalResultDao
 import edu.utcj.acceso.data.local.EvalResultEntity
+import edu.utcj.acceso.data.repository.AccessLogRepository
 import edu.utcj.acceso.data.repository.AuthRepository
 import edu.utcj.acceso.ui.components.AccesoTopBar
 import edu.utcj.acceso.ui.components.AlertBanner
@@ -44,6 +45,7 @@ import edu.utcj.acceso.ui.components.StatusPill
 import edu.utcj.acceso.ui.components.Tone
 import edu.utcj.acceso.ui.theme.Spacing
 import edu.utcj.acceso.util.TimeUtil
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -51,9 +53,15 @@ import javax.inject.Inject
 @HiltViewModel
 class EvalModeViewModel @Inject constructor(
     private val dao: EvalResultDao,
-    private val auth: AuthRepository
+    private val auth: AuthRepository,
+    log: AccessLogRepository
 ) : ViewModel() {
     val results = dao.observeAll()
+
+    /** Tiempo promedio de verificación de los últimos 7 días (antes estaba en el panel de inicio). */
+    val avgVerifyMs = log.observeSince(TimeUtil.daysAgoStartMs(6)).map { events ->
+        events.mapNotNull { it.verifyDurationMs }.takeIf { it.isNotEmpty() }?.average()?.toLong()
+    }
     suspend fun record(scenario: String, passed: Boolean, notes: String, durationMs: Long?) {
         dao.insert(
             EvalResultEntity(
@@ -72,6 +80,7 @@ private val scenarios = listOf(
 @Composable
 fun EvalModeScreen(onBack: () -> Unit, vm: EvalModeViewModel = hiltViewModel()) {
     val results by vm.results.collectAsState(initial = emptyList())
+    val avgVerifyMs by vm.avgVerifyMs.collectAsState(initial = null)
     var scenario by remember { mutableStateOf(scenarios.first()) }
     var notes by remember { mutableStateOf("") }
     var passed by remember { mutableStateOf(true) }
@@ -87,6 +96,11 @@ fun EvalModeScreen(onBack: () -> Unit, vm: EvalModeViewModel = hiltViewModel()) 
             item {
                 AlertBanner("Herramienta interna", Tone.Info, Icons.Rounded.Science,
                     message = "Documenta escenarios de prueba del acceso con QR. No afecta la bitácora.")
+                Spacer(Modifier.height(Spacing.sm))
+                Text(
+                    "Verificación promedio (7 días): ${avgVerifyMs?.let(::formatVerifyMs) ?: "sin datos"}",
+                    style = MaterialTheme.typography.titleSmall
+                )
                 Spacer(Modifier.height(Spacing.lg))
                 Text("Escenario", style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {

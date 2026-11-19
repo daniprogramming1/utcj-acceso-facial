@@ -27,7 +27,8 @@ zxing = "3.5.2"
 fragment = "1.6.2"
 splashscreen = "1.0.1"
 roborazzi = "1.10.1"
-robolectric = "4.11.1"
+# 4.12+ incluye el runtime de gráficos nativos para Windows (capturas Roborazzi en cualquier SO)
+robolectric = "4.12.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

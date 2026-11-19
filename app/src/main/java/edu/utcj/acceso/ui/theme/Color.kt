@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.Color
 import edu.utcj.acceso.brand.BrandConfig
 
 /*
- * Tokens de color del sistema de diseño.
+ * Tokens de color «Atardecer de frontera» (DISEÑO.md §3).
  * Los colores de marca vienen de [BrandConfig.palette]; aquí se definen neutros y semánticos.
  */
 
@@ -14,45 +14,42 @@ private val brand = BrandConfig.palette
 
 // Marca (atajos)
 val BrandPrimary = brand.primary
-val BrandPrimaryBright = brand.primaryBright
 val BrandSecondary = brand.secondary
 val BrandNavy = brand.navy
-val BrandNavyLight = brand.navyLight
 
-// Neutros (escala fría, ligeramente azulada)
-val Neutral0 = Color(0xFFFFFFFF)
-val Neutral10 = Color(0xFFF7F9FB)
-val Neutral20 = Color(0xFFEEF2F6)
-val Neutral30 = Color(0xFFE2E8EF)
-val Neutral40 = Color(0xFFCBD5E1)
-val Neutral50 = Color(0xFF94A3B8)
-val Neutral60 = Color(0xFF64748B)
-val Neutral70 = Color(0xFF475569)
-val Neutral80 = Color(0xFF1E293B)
-val Neutral90 = Color(0xFF0F172A)
-val NeutralDark0 = Color(0xFF0B1220)
-val NeutralDark10 = Color(0xFF111A2B)
-val NeutralDark20 = Color(0xFF172236)
-val NeutralDark30 = Color(0xFF213049)
-val NeutralDark40 = Color(0xFF33435E)
+// Neutros arena (cálidos, nunca grises puros). 90 = tinta «Noche del desierto».
+val Neutral0 = Color(0xFFFFFDF9)
+val Neutral10 = Color(0xFFFBF7F2)
+val Neutral20 = Color(0xFFF3EBE1)
+val Neutral30 = Color(0xFFE7DCCD)
+val Neutral40 = Color(0xFFD3C3AF)
+val Neutral50 = Color(0xFF9A8670) // ≥ 3:1 sobre fondo: bordes de campos
+val Neutral60 = Color(0xFF85725F)
+val Neutral70 = Color(0xFF6B5A48) // texto secundario (6.4:1 sobre fondo)
+val Neutral80 = Color(0xFF2E241B)
+val Neutral90 = brand.ink
+
+// Noche del desierto (tema oscuro)
+val NeutralDark0 = Color(0xFF12131C)
+val NeutralDark10 = Color(0xFF1A1B26)
+val NeutralDark20 = Color(0xFF232532)
+val NeutralDark30 = Color(0xFF2F3141)
+val NeutralDark40 = Color(0xFF6E7086) // ≥ 3:1 sobre fondo oscuro: bordes de campos
+val SandText = Color(0xFFF3EBE1)
+val SandTextMuted = Color(0xFFCDBFAE)
 
 // Semánticos
 val SuccessGreen = Color(0xFF15803D)
 val SuccessGreenBright = Color(0xFF22C55E)
-val DangerRed = Color(0xFFC62828)
+val DangerRed = Color(0xFFB91C1C)
 val DangerRedBright = Color(0xFFEF4444)
 val WarningAmber = Color(0xFFB45309)
 val WarningAmberBright = Color(0xFFF59E0B)
 val InfoBlue = Color(0xFF1D4ED8)
 
-// Compatibilidad con código previo
-val AccessGreen = SuccessGreen
-val AccessRed = DangerRed
-val UtcjTeal = BrandPrimary
-val UtcjBlue = BrandSecondary
-
 /**
- * Colores extendidos (fuera de Material ColorScheme): estados semánticos, gráficas y kiosco.
+ * Colores extendidos (fuera de Material ColorScheme): estados semánticos, gráficas,
+ * degradado del encabezado y sombra tintada (las sombras nunca son grises).
  */
 @Immutable
 data class ExtendedColors(
@@ -80,6 +77,8 @@ data class ExtendedColors(
     val heroGradientStart: Color,
     val heroGradientEnd: Color,
     val cardBorder: Color,
+    /** Color de sombra (ambient/spot) tintado con la marca. */
+    val shadow: Color,
     val isDark: Boolean = false
 )
 
@@ -101,13 +100,14 @@ val LightExtendedColors = ExtendedColors(
     onInfoContainer = Color(0xFF1E3A8A),
     neutralContainer = Neutral20,
     onNeutralContainer = Neutral70,
-    chart1 = BrandPrimaryBright,
-    chart2 = BrandSecondary,
+    chart1 = brand.primaryBright,
+    chart2 = brand.secondary,
     chart3 = DangerRedBright,
     chartGrid = Neutral30,
-    heroGradientStart = Color(0xFF00695C),
-    heroGradientEnd = Color(0xFF1D4ED8),
-    cardBorder = Neutral30
+    heroGradientStart = brand.ink,
+    heroGradientEnd = Color(0xFF7C2D12), // noche → brasa del atardecer
+    cardBorder = Neutral30,
+    shadow = Color(0xFF7C2D12)
 )
 
 val DarkExtendedColors = ExtendedColors(
@@ -127,14 +127,15 @@ val DarkExtendedColors = ExtendedColors(
     infoContainer = Color(0xFF1E3A8A),
     onInfoContainer = Color(0xFFDBEAFE),
     neutralContainer = NeutralDark30,
-    onNeutralContainer = Neutral40,
+    onNeutralContainer = SandTextMuted,
     chart1 = brand.primaryLight,
     chart2 = brand.secondaryLight,
     chart3 = Color(0xFFF87171),
     chartGrid = NeutralDark30,
-    heroGradientStart = Color(0xFF004D44),
-    heroGradientEnd = Color(0xFF1E3A8A),
+    heroGradientStart = Color(0xFF0D0E16),
+    heroGradientEnd = Color(0xFF5A1F0B),
     cardBorder = NeutralDark30,
+    shadow = Color.Black,
     isDark = true
 )
 

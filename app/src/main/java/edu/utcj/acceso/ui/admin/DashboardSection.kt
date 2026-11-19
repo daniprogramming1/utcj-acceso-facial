@@ -22,10 +22,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.DoorFront
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HourglassTop
 import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.PersonAddAlt1
-import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -53,6 +53,7 @@ import edu.utcj.acceso.data.repository.AccessLogRepository
 import edu.utcj.acceso.data.repository.AuthRepository
 import edu.utcj.acceso.data.repository.SettingsRepository
 import edu.utcj.acceso.data.repository.StudentRepository
+import edu.utcj.acceso.data.repository.VisitorRepository
 import edu.utcj.acceso.domain.analytics.AccessAlert
 import edu.utcj.acceso.domain.analytics.AlertType
 import edu.utcj.acceso.domain.analytics.AlertsEngine
@@ -96,6 +97,8 @@ data class DashboardUi(
     val stats: DashboardStats = DashboardStats(),
     val alerts: List<AccessAlert> = emptyList(),
     val pendingCount: Int = 0,
+    /** Visitantes con entrada y sin salida registrada (dato real de la caseta). */
+    val visitorsInside: Int = 0,
     val nowMs: Long = System.currentTimeMillis(),
     val error: String? = null
 )
@@ -104,6 +107,7 @@ data class DashboardUi(
 class DashboardViewModel @Inject constructor(
     log: AccessLogRepository,
     students: StudentRepository,
+    visitors: VisitorRepository,
     private val settings: SettingsRepository,
     private val auth: AuthRepository
 ) : ViewModel() {
@@ -125,15 +129,16 @@ class DashboardViewModel @Inject constructor(
             combine(
                 log.observeSince(TimeUtil.daysAgoStartMs(7)),
                 students.observePending(),
+                visitors.observeInside(),
                 ticker
-            ) { events, pending, now -> build(events, pending.size, now) }
+            ) { events, pending, inside, now -> build(events, pending.size, inside.size, now) }
         )
     }.catch { e ->
         Log.e(TAG, "No se pudo cargar el tablero", e)
         emit(DashboardUi(loading = false, error = "No se pudieron cargar las estadísticas. Los demás módulos funcionan con normalidad."))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUi())
 
-    private fun build(events: List<AccessEvent>, pendingCount: Int, now: Long): DashboardUi {
+    private fun build(events: List<AccessEvent>, pendingCount: Int, visitorsInside: Int, now: Long): DashboardUi {
         val todayStart = TimeUtil.startOfDayMs(now)
         val stats = runCatching { DashboardCalculator.compute(events, now) }
             .onFailure { Log.e(TAG, "Error al calcular KPI", it) }
@@ -141,7 +146,10 @@ class DashboardViewModel @Inject constructor(
         val alerts = runCatching {
             AlertsEngine.build(events.filter { it.datetimeMs >= todayStart }, settings.getHoursStart(), settings.getHoursEnd())
         }.onFailure { Log.e(TAG, "Error al calcular alertas", it) }.getOrDefault(emptyList())
-        return DashboardUi(loading = false, stats = stats, alerts = alerts, pendingCount = pendingCount, nowMs = now)
+        return DashboardUi(
+            loading = false, stats = stats, alerts = alerts, pendingCount = pendingCount,
+            visitorsInside = visitorsInside, nowMs = now
+        )
     }
 
     private companion object {
@@ -305,9 +313,11 @@ private fun KpiGrid(ui: DashboardUi, wide: Boolean, onOpen: (AdminSection) -> Un
             )
         },
         { m ->
+            // Lo que el guardia necesita saber en la caseta (el tiempo de verificación vive en Modo evaluación).
             KpiCard(
-                "Tiempo promedio", if (s.avgVerifyMs <= 0) "—" else formatVerifyMs(s.avgVerifyMs), Icons.Rounded.Timer, Tone.Info, m,
-                supporting = "por verificación"
+                "Visitantes dentro", if (ui.loading) "—" else ui.visitorsInside.toString(), Icons.Rounded.Groups, Tone.Info, m,
+                supporting = if (ui.visitorsInside > 0) "Sin salida registrada" else "Nadie pendiente",
+                onClick = { onOpen(AdminSection.VISITORS) }
             )
         },
         { m ->

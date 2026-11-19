@@ -250,7 +250,8 @@ class GuardFlowTest {
         val phone = SoftwareQrSigner.generate()
         val now = System.currentTimeMillis()
         // Horario que incluye la hora actual, para que la prueba pase a cualquier hora.
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        // Misma zona que usa la app para decidir el horario (no la zona por defecto de la JVM).
+        val hour = edu.utcj.acceso.util.TimeUtil.hourOfDay(now)
         SettingsRepository(store).setHours(hour, (hour + 2) % 24)
         val registration = QrCrypto.registrationQr(phone, "20249999", "Ana López Núñez", "TI · 5A", "ana@utcj.edu.mx", "2.0.0", now)
         login()

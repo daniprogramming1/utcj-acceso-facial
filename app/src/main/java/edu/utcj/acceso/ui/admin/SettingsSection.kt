@@ -118,7 +118,7 @@ class SettingsViewModel @Inject constructor(
         hoursEnd = settings.getHoursEnd(),
         kioskOrientation = settings.getKioskOrientation(),
         kioskIdleMs = settings.getKioskIdleMs(),
-        kioskSound = settings.isKioskSoundEnabled()
+        kioskSound = settings.isScanSoundEnabled()
     )
 
     fun apply(ui: SettingsUi) {
@@ -127,7 +127,7 @@ class SettingsViewModel @Inject constructor(
         settings.setHours(ui.hoursStart, ui.hoursEnd)
         settings.setKioskOrientation(ui.kioskOrientation)
         settings.setKioskIdleMs(ui.kioskIdleMs)
-        settings.setKioskSoundEnabled(ui.kioskSound)
+        settings.setScanSoundEnabled(ui.kioskSound)
     }
 
     suspend fun importCsv(input: java.io.InputStream) = students.importStatusFromStream(input)
@@ -353,7 +353,7 @@ private fun KioskCard(ui: SettingsUi, onChange: (SettingsUi) -> Unit, onKiosk: (
             }
         }
         Spacer(Modifier.height(Spacing.sm))
-        SwitchRow("Sonido de confirmación", "Tono breve al permitir o denegar", ui.kioskSound, Icons.AutoMirrored.Rounded.VolumeUp) {
+        SwitchRow("Sonido de confirmación", "Tono breve al permitir o denegar, en el escáner y en el kiosco", ui.kioskSound, Icons.AutoMirrored.Rounded.VolumeUp) {
             onChange(ui.copy(kioskSound = it))
         }
         Spacer(Modifier.height(Spacing.sm))

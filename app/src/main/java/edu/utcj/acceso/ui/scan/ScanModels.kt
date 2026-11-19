@@ -13,14 +13,16 @@ data class ScanCardModel(
     val status: StudentStatus? = null,
     val reasonTitle: String? = null,
     val reasonDetail: String? = null,
-    val timeMs: Long = System.currentTimeMillis()
+    val timeMs: Long = System.currentTimeMillis(),
+    /** Motivo tipado del rechazo (decide qué se puede mostrar en el kiosco). */
+    val reason: DenialReason? = null
 ) {
     /** Hay un alumno identificado (no «QR no válido»). */
     val known: Boolean get() = matricula.isNotBlank() && matricula != "—"
 
     companion object {
         fun denied(reason: DenialReason, atMs: Long, matricula: String = "—", nombre: String = reason.labelEs) =
-            ScanCardModel(false, nombre, matricula, reasonTitle = reason.labelEs, reasonDetail = reason.detailEs, timeMs = atMs)
+            ScanCardModel(false, nombre, matricula, reasonTitle = reason.labelEs, reasonDetail = reason.detailEs, timeMs = atMs, reason = reason)
     }
 }
 
@@ -34,6 +36,7 @@ fun ScanOutcome.Access.toCard(): ScanCardModel {
         status = s?.status,
         reasonTitle = reason?.labelEs,
         reasonDetail = reason?.detailEs,
-        timeMs = atMs
+        timeMs = atMs,
+        reason = reason
     )
 }
