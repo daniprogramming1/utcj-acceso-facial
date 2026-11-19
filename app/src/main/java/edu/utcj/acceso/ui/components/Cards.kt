@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -112,19 +113,18 @@ fun KpiCard(
     onClick: (() -> Unit)? = null
 ) {
     AppCard(modifier = modifier, onClick = onClick) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(icon, tone, size = 36.dp)
-            Spacer(Modifier.width(Spacing.md))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Spacer(Modifier.height(Spacing.md))
+        // Ícono arriba y etiqueta a todo el ancho: en tarjetas de media pantalla, con texto
+        // grande, compartir fila partía las palabras («Pendien tes»).
+        IconBadge(icon, tone, size = 36.dp)
+        Spacer(Modifier.height(Spacing.sm))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(Spacing.xs))
         Text(value, style = MaterialTheme.typography.headlineMedium, maxLines = 1)
         if (trend != null || supporting != null) {
             Spacer(Modifier.height(Spacing.xs))
@@ -220,13 +220,22 @@ fun DetailRow(label: String, value: String, modifier: Modifier = Modifier, icon:
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(Spacing.md))
         }
+        // La etiqueta conserva su ancho natural y el valor ocupa el resto: con texto grande el
+        // valor se parte en líneas, nunca la etiqueta letra por letra.
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
+            maxLines = 1
         )
         Spacer(Modifier.width(Spacing.md))
-        Text(value, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(
+            value,
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
     }
 }

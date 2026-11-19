@@ -29,3 +29,6 @@ Una línea por decisión: qué se decidió y por qué.
 | 2026-11-19 | La matrícula sigue aceptando letras; el teclado numérico depende de `BrandConfig.MATRICULA_NUMERIC` | La app es white-label y otras escuelas usan letras; la UTCJ usa 8 dígitos |
 | 2026-11-19 | Validación en vivo, salvo «demasiado corta» (solo al continuar) | Avisar a tiempo sin regañar a quien sigue escribiendo |
 | 2026-11-19 | «QR de registro» se oculta si el pase está activo o si el alumno tocó «Ya me aprobaron»; queda un enlace | El teléfono del alumno nunca se entera de la aprobación del guardia: la marca local es la única señal |
+| 2026-11-19 | Los textos se quedan en el código (no `strings.xml`) | Decisión del usuario: 521 textos en una app solo en español; alto riesgo y poco valor hoy |
+| 2026-11-19 | El contraste se verifica con una prueba (`ContrastTest`), no a ojo | Encontró un fallo real (franja del tema oscuro 2.28:1) que las capturas no hacían evidente |
+| 2026-11-19 | KPI con ícono arriba y etiqueta debajo | Con texto grande, ícono + etiqueta en la misma fila partía las palabras |

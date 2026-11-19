@@ -136,7 +136,7 @@ class GuardFlowTest {
     private fun assertPanelWorks(expectEmpty: Boolean) {
         compose.waitForText("Actividad reciente")
         drawFrames() // estado de carga (esqueletos) y animación de entrada de las gráficas
-        if (expectEmpty) compose.waitForText("Sin actividad")
+        if (expectEmpty) compose.waitForText("Todavía nadie ha cruzado")
         compose.waitForText("Accesos por hora")
         compose.waitForIdle()
         drawFrames()
@@ -220,7 +220,7 @@ class GuardFlowTest {
         compose.waitForText("Acceso de seguridad")
         type("Contraseña", "Seguro#2026")
         compose.onNode(hasText("Entrar al panel") and hasClickAction()).performClick()
-        compose.waitForText("Sin actividad")
+        compose.waitForText("Todavía nadie ha cruzado")
         drawFrames()
         for (item in listOf("Escanear QR", "Alumnos", "Aprobaciones", "Bitácora", "Visitantes", "Incidencias", "Configuración", "Inicio")) {
             compose.onNode(hasText(item) and hasClickAction()).performClick()

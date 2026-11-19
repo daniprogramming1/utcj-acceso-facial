@@ -184,7 +184,7 @@ fun StudentsContent(
                 ui.students.isEmpty() -> EmptyState(
                     title = if (ui.query.isBlank() && ui.filter == StudentFilter.ALL) "Aún no hay alumnos" else "Sin resultados",
                     message = if (ui.query.isBlank() && ui.filter == StudentFilter.ALL)
-                        "Los alumnos aparecerán aquí cuando se registren desde la app."
+                        "Aparecen aquí en cuanto se registran desde su teléfono y los apruebas en caseta."
                     else "Prueba con otra búsqueda o cambia el filtro.",
                     modifier = Modifier.fillMaxSize(),
                     illustration = if (ui.query.isNotBlank()) {

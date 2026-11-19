@@ -464,7 +464,7 @@ private fun PassField(label: String, value: String, modifier: Modifier = Modifie
     Column(modifier) {
         Text(label, style = AppType.eyebrow, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(Spacing.xxs))
-        Text(value, style = AppType.passValue, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, style = AppType.passValue, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 

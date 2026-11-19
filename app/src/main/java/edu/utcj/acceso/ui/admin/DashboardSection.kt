@@ -3,6 +3,7 @@ package edu.utcj.acceso.ui.admin
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -260,7 +261,8 @@ private fun HeroCard(guardName: String, ui: DashboardUi, onKiosk: () -> Unit, on
                     // En pantallas angostas se ocultan los íconos para que el texto quepa en una línea.
                     val icons = maxWidth >= 340.dp
                     val pad = androidx.compose.foundation.layout.PaddingValues(horizontal = if (icons) 20.dp else 12.dp, vertical = 10.dp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                    // FlowRow: con texto grande el segundo botón baja de línea en vez de recortarse.
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm), verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
                         Button(
                             onClick = onKiosk,
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = ext.heroGradientEnd),
@@ -423,8 +425,8 @@ private fun RecentCard(recent: List<AccessEvent>, nowMs: Long, modifier: Modifie
         )
         if (recent.isEmpty()) {
             EmptyState(
-                "Sin actividad",
-                "Los accesos aparecerán aquí en tiempo real.",
+                "Todavía nadie ha cruzado",
+                "En cuanto alguien pase por la caseta, lo verás aquí.",
                 modifier = Modifier.fillMaxWidth().padding(Spacing.lg)
             )
         } else {

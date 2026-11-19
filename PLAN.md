@@ -40,10 +40,12 @@ JAVA_HOME="$HOME/.jdks/jbr-17.0.14" ./gradlew :app:recordRoborazziDebug   # rege
 - [x] Verificar: 118/118 pruebas (nuevas: `LogGroupingTest`, `CarreraFormatTest`); capturas 03b, 04, 09 y 11 regeneradas
 - Pendiente: confirmar con Servicios Escolares la lista oficial de carreras
 
-## Fase 4 — Accesibilidad y voz
-- [ ] Todos los textos a `strings.xml`, reescritos con la voz de `DISEÑO.md`
-- [ ] Auditar `contentDescription` (hoy hay 49 en `null`), foco visible y áreas táctiles ≥ 48 dp
-- [ ] Capturas Roborazzi con `fontScale` 1.5; contraste AA de todos los pares de tokens
+## Fase 4 — Accesibilidad y voz ✅
+- [~] ~~Todos los textos a `strings.xml`~~ — descartado por decisión del usuario (521 textos, app solo en español); la voz se aplicó a los estados vacíos
+- [x] `contentDescription`: los 8 botones de solo ícono ya tenían descripción; los 51 `null` son íconos decorativos junto a texto (correcto). El aviso «Se registra sola en N s» ya no es liveRegion (TalkBack lo leía cada segundo)
+- [x] `ContrastTest`: contraste AA de todos los pares de texto (claro, oscuro, kiosco y banda del pase). Encontró la franja «Acceso permitido» del tema oscuro en 2.28:1 → ahora usa `onSuccess`/`onDanger`
+- [x] Capturas con `fontScale` 1.5 (`a11y-*`): se corrigieron «Carrera» partida letra por letra (`DetailRow`), etiquetas de KPI cortadas a media palabra (`KpiCard`), botones del panel recortados (`FlowRow`) y la carrera del pase (2 líneas)
+- Aceptado: con texto grande, las etiquetas de la barra inferior y los nombres largos de la bitácora terminan en «…» (comportamiento estándar de Material)
 
 ## Fase 5 — Resto de pantallas y cierre
 - [ ] Onboarding, rol, login, consentimiento, eliminar datos, visitantes e incidencias con la nueva dirección

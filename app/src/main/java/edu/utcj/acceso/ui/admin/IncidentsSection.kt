@@ -107,8 +107,8 @@ fun IncidentsContent(
     ) { padding ->
         if (incidents.isEmpty()) {
             EmptyState(
-                "Sin incidencias",
-                "Aquí verás los reportes de seguridad y las solicitudes de ayuda hechas desde el kiosco.",
+                "Turno tranquilo",
+                "Ningún reporte. Si algo pasa o alguien pide ayuda desde el kiosco, aparece aquí.",
                 illustration = { SuccessIllustration(Modifier.height(140.dp)) },
                 modifier = Modifier.fillMaxSize().padding(padding)
             )

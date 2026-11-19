@@ -2,6 +2,9 @@ package edu.utcj.acceso.screenshots
 
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -77,10 +80,14 @@ class ScreenshotTests {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun shot(name: String, dark: Boolean = false, content: @Composable () -> Unit) {
+    /** @param fontScale 1.5 = «texto grande» del sistema (CLAUDE.md §3.8, accesibilidad). */
+    private fun shot(name: String, dark: Boolean = false, fontScale: Float = 1f, content: @Composable () -> Unit) {
         compose.mainClock.autoAdvance = false
         compose.setContent {
-            AccesoUtcjTheme(darkTheme = dark, reducedMotion = true) { content() }
+            val base = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
+                AccesoUtcjTheme(darkTheme = dark, reducedMotion = true) { content() }
+            }
         }
         compose.mainClock.advanceTimeBy(1_500)
         compose.onRoot().captureRoboImage("$OUT/$name.png")
@@ -127,7 +134,10 @@ class ScreenshotTests {
     }
 
     @Test
-    fun s03b_registrationData() = shot("03b-registro-datos") {
+    fun s03b_registrationData() = shot("03b-registro-datos") { RegistrationDataBody() }
+
+    @Composable
+    private fun RegistrationDataBody() {
         RegistrationContent(
             state = RegistrationUi(
                 step = RegStep.DATA, matricula = "20231045", nombre = "Ana Sofía López",
@@ -146,7 +156,10 @@ class ScreenshotTests {
 
     /** Pase vivo a las 7:42 (amanecer en Juárez), con 42 s restantes. */
     @Test
-    fun s04_studentAccessQr() = shot("04-alumno-qr-acceso") {
+    fun s04_studentAccessQr() = shot("04-alumno-qr-acceso") { PassBody() }
+
+    @Composable
+    private fun PassBody() {
         StudentHomeContent(
             matricula = "20231045",
             student = ana.copy(status = StudentStatus.APPROVED),
@@ -286,7 +299,32 @@ class ScreenshotTests {
     }
 
     @Test
-    fun s11_accessLog() = shot("11-panel-bitacora") {
+    fun s11_accessLog() = shot("11-panel-bitacora") { AccessLogBody() }
+
+    // ---- Texto grande (fontScale 1.5): nada debe cortarse ni encimarse ----
+
+    @Test
+    fun a11y_pass() = shot("a11y-04-pase-texto-grande", fontScale = 1.5f) { PassBody() }
+
+    @Test
+    fun a11y_registration() = shot("a11y-03b-registro-texto-grande", fontScale = 1.5f) { RegistrationDataBody() }
+
+    @Test
+    fun a11y_dashboard() = shot("a11y-09-panel-texto-grande", fontScale = 1.5f) {
+        AdminFrame(AdminSection.DASHBOARD, AppWindowSize.Compact) { DashboardBody() }
+    }
+
+    @Test
+    fun a11y_accessLog() = shot("a11y-11-bitacora-texto-grande", fontScale = 1.5f) { AccessLogBody() }
+
+    @Test
+    fun a11y_scanAllowed() = shot(
+        "a11y-14-escaner-texto-grande", fontScale = 1.5f,
+        content = scan(ScanUi(result = PanelScanResult.Access(allowedCard, undoSecondsLeft = 4)))
+    )
+
+    @Composable
+    private fun AccessLogBody() {
         AdminFrame(AdminSection.LOG, AppWindowSize.Compact) {
             AccessLogContent(
                 ui = AccessLogUi(

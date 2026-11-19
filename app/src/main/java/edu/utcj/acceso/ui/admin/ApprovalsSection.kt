@@ -114,7 +114,7 @@ fun ApprovalsContent(
             ui.loading -> SkeletonList(modifier = Modifier.padding(horizontal = Spacing.screenCompact))
             ui.pending.isEmpty() -> EmptyState(
                 title = "Todo al día",
-                message = "Los alumnos se registran en su propio teléfono. Escanea su QR de registro para aprobarlos.",
+                message = "Nadie espera aprobación. Cuando un alumno te enseñe su QR de registro, escanéalo y aparece aquí.",
                 illustration = { SuccessIllustration(Modifier.size(150.dp)) },
                 modifier = Modifier.fillMaxSize()
             )

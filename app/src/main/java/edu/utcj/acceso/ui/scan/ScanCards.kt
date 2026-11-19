@@ -63,12 +63,15 @@ import edu.utcj.acceso.util.TimeUtil
 @Composable
 fun AccessVerdictBanner(allowed: Boolean, reason: String?, modifier: Modifier = Modifier) {
     val c = toneColors(if (allowed) Tone.Success else Tone.Danger)
+    // Texto sobre el acento: blanco en claro, oscuro en el tema oscuro (verde/rojo brillantes).
+    val ext = AppTheme.extended
+    val onAccent = if (allowed) ext.onSuccess else ext.onDanger
     Row(
         modifier.fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             .background(c.accent)
             // «Carril verde»: la luz sube una vez al permitir.
-            .laneSweep(key = allowed, color = androidx.compose.ui.graphics.Color.White, enabled = allowed)
+            .laneSweep(key = allowed, color = onAccent, enabled = allowed)
             .padding(Spacing.lg)
             .semantics { liveRegion = LiveRegionMode.Assertive },
         verticalAlignment = Alignment.CenterVertically
@@ -76,7 +79,7 @@ fun AccessVerdictBanner(allowed: Boolean, reason: String?, modifier: Modifier = 
         Icon(
             if (allowed) Icons.Rounded.CheckCircle else Icons.Rounded.Cancel,
             contentDescription = null,
-            tint = androidx.compose.ui.graphics.Color.White,
+            tint = onAccent,
             modifier = Modifier.size(40.dp)
         )
         Spacer(Modifier.width(Spacing.md))
@@ -84,10 +87,10 @@ fun AccessVerdictBanner(allowed: Boolean, reason: String?, modifier: Modifier = 
             Text(
                 if (allowed) "Acceso permitido" else "Acceso denegado",
                 style = MaterialTheme.typography.headlineSmall,
-                color = androidx.compose.ui.graphics.Color.White
+                color = onAccent
             )
             reason?.let {
-                Text(it, style = MaterialTheme.typography.titleMedium, color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.92f))
+                Text(it, style = MaterialTheme.typography.titleMedium, color = onAccent.copy(alpha = 0.92f))
             }
         }
     }
@@ -152,7 +155,7 @@ fun StudentScanCard(
                 "Se registra sola en $undoSecondsLeft s, o al escanear al siguiente. Si algo no cuadra, no la dejes pasar.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+                // Sin liveRegion: TalkBack lo leería cada segundo; la franja ya anunció el resultado.
             )
             Spacer(Modifier.height(Spacing.md))
             SecondaryButton("No permitir · $undoSecondsLeft s", onClick = onDeny, icon = Icons.Rounded.Block, modifier = Modifier.fillMaxWidth())
