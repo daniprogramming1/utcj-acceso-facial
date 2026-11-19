@@ -32,3 +32,6 @@ Una línea por decisión: qué se decidió y por qué.
 | 2026-11-19 | Los textos se quedan en el código (no `strings.xml`) | Decisión del usuario: 521 textos en una app solo en español; alto riesgo y poco valor hoy |
 | 2026-11-19 | El contraste se verifica con una prueba (`ContrastTest`), no a ojo | Encontró un fallo real (franja del tema oscuro 2.28:1) que las capturas no hacían evidente |
 | 2026-11-19 | KPI con ícono arriba y etiqueta debajo | Con texto grande, ícono + etiqueta en la misma fila partía las palabras |
+| 2026-11-19 | El logotipo (teal/azul) no se cambia; solo el fondo del ícono del lanzador | Es la marca institucional de la UTCJ; recolorearla no le toca a la app |
+| 2026-11-19 | Lema «Tu pase de entrada, sin filas ni papeles.» | El anterior («inteligente, rápido y privado») era relleno genérico que CLAUDE.md §3 prohíbe |
+| 2026-11-19 | Figma: se actualizaron variables y estilos, no la distribución de cada pantalla | Cambia toda la piel en dos llamadas; rehacer cada layout es un trabajo aparte |

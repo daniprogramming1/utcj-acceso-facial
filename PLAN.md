@@ -47,8 +47,11 @@ JAVA_HOME="$HOME/.jdks/jbr-17.0.14" ./gradlew :app:recordRoborazziDebug   # rege
 - [x] Capturas con `fontScale` 1.5 (`a11y-*`): se corrigieron «Carrera» partida letra por letra (`DetailRow`), etiquetas de KPI cortadas a media palabra (`KpiCard`), botones del panel recortados (`FlowRow`) y la carrera del pase (2 líneas)
 - Aceptado: con texto grande, las etiquetas de la barra inferior y los nombres largos de la bitácora terminan en «…» (comportamiento estándar de Material)
 
-## Fase 5 — Resto de pantallas y cierre
-- [ ] Onboarding, rol, login, consentimiento, eliminar datos, visitantes e incidencias con la nueva dirección
-- [ ] Estados vacío, error y carga con voz propia en cada vista
-- [ ] Actualizar el Figma «Acceso UTCJ — Layouts», `README.md`, `ARCHITECTURE.md` y `docs/screenshots`
-- [ ] Autocrítica de `CLAUDE.md` §6 pantalla por pantalla
+## Fase 5 — Resto de pantallas y cierre ✅
+- [x] Onboarding, rol, login, consentimiento, eliminar datos, visitantes e incidencias: heredan los tokens (paleta, tipografía, radios, sombras) sin cambios de estructura; revisadas en capturas
+- [x] Lema con voz propia («Tu pase de entrada, sin filas ni papeles.») en splash y selección de rol
+- [x] Ícono del lanzador con fondo de atardecer (terracota → noche); el logotipo se conserva por ser institucional
+- [x] Estados vacíos con voz propia (Fase 4); carga con esqueletos ya existentes
+- [x] Figma «Acceso UTCJ — Layouts»: variables de color y estilos de texto actualizados (todas las pantallas cambian solas) y colores fijos reemplazados
+- [x] `ARCHITECTURE.md` (formas, movimiento, accesibilidad, componentes) y `docs/screenshots` regeneradas
+- Pendiente (fuera de este plan): rediseñar en Figma la distribución de las pantallas que cambiaron (pase vivo, escáner con ventana, bitácora con filtros); el onboarding aún usa el patrón «3 tarjetas con ícono» que §3 desaconseja

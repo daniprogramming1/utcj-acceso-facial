@@ -27,7 +27,7 @@ object BrandConfig {
 
     const val INSTITUTION_NAME = "Universidad Tecnológica de Ciudad Juárez"
     const val INSTITUTION_SHORT = "UTCJ"
-    const val TAGLINE = "Control de acceso inteligente, rápido y privado"
+    const val TAGLINE = "Tu pase de entrada, sin filas ni papeles."
 
     /** Contacto de soporte mostrado en «Acerca de» y en el kiosco. Confirmar con la institución. */
     const val SUPPORT_EMAIL = "soporte.acceso@utcj.edu.mx"
