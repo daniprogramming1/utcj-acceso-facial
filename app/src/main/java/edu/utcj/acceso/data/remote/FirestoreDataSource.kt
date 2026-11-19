@@ -1,40 +1,69 @@
 package edu.utcj.acceso.data.remote
 
 import android.util.Log
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import edu.utcj.acceso.BuildConfig
 import edu.utcj.acceso.data.local.AccessEventEntity
+import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Optional Firestore sync layer.
+ * Capa de sincronización con Firestore.
  *
- * Firebase dependencies are commented out in Gradle by default.
- * When enabled, replace the stub body with FirebaseFirestore uploads.
- * Until then, sync is a no-op that reports success so WorkManager can clear the queue
- * only when [isEnabled] is false; when a future build enables Firebase, wire real writes.
+ * Se activa sola cuando existe `app/google-services.json` (ver `BuildConfig.FIREBASE_ENABLED`).
+ * Sin ese archivo la app es 100 % offline: el worker trata los eventos como "sincronizados
+ * localmente" para vaciar la cola.
+ *
+ * Cada evento se escribe en `access_events/{syncKey}`: usar `syncKey` como ID hace la escritura
+ * idempotente (reintentos de WorkManager nunca crean duplicados).
  */
 @Singleton
 class FirestoreDataSource @Inject constructor() {
 
     companion object {
         private const val TAG = "FirestoreDataSource"
-        /** Set true only when google-services + Firestore deps are active. */
-        const val FIRESTORE_COMPILED_IN = false
+        const val COLLECTION_ACCESS_EVENTS = "access_events"
     }
 
-    val isEnabled: Boolean get() = FIRESTORE_COMPILED_IN
+    val isEnabled: Boolean get() = BuildConfig.FIREBASE_ENABLED
+
+    private val db: FirebaseFirestore by lazy { FirebaseFirestore.getInstance() }
 
     suspend fun uploadAccessEvent(event: AccessEventEntity): Boolean {
         if (!isEnabled) {
-            Log.d(TAG, "Firestore disabled — skip upload for syncKey=${event.syncKey}")
-            // Offline-first: treat as "synced locally only" when Firebase is off
+            Log.d(TAG, "Firestore desactivado — se omite syncKey=${event.syncKey}")
             return true
         }
-        // Placeholder for:
-        // FirebaseFirestore.getInstance().collection("access_events")
-        //   .document(event.syncKey).set(mapOf(...)).await()
-        return false
+        if (event.syncKey.isBlank()) {
+            Log.w(TAG, "Evento ${event.id} sin syncKey; no se sube")
+            return false
+        }
+        return try {
+            db.collection(COLLECTION_ACCESS_EVENTS)
+                .document(event.syncKey)
+                .set(event.toFirestoreMap(), SetOptions.merge())
+                .await()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Fallo al subir syncKey=${event.syncKey}", e)
+            false
+        }
     }
 
     suspend fun ping(): Boolean = isEnabled
+
+    private fun AccessEventEntity.toFirestoreMap(): Map<String, Any?> = mapOf(
+        "syncKey" to syncKey,
+        "datetimeMs" to datetimeMs,
+        "matricula" to matricula,
+        "nombre" to nombre,
+        "result" to result.name,
+        "method" to method.name,
+        "authorizingGuard" to authorizingGuard,
+        "reason" to reason,
+        "similarity" to similarity,
+        "verifyDurationMs" to verifyDurationMs
+    )
 }

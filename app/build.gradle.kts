@@ -4,8 +4,13 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
     alias(libs.plugins.hilt)
     alias(libs.plugins.roborazzi) // capturas de pantalla JVM (Robolectric)
-    // Optional Firebase — uncomment when google-services.json is in app/:
-    // alias(libs.plugins.google.services)
+}
+
+// Firebase se activa solo si existe app/google-services.json (no se sube al repo).
+// Sin el archivo la app compila igual y funciona 100 % sin conexión.
+val firebaseEnabled = file("google-services.json").exists()
+if (firebaseEnabled) {
+    apply(plugin = "com.google.gms.google-services")
 }
 
 android {
@@ -20,6 +25,7 @@ android {
         versionName = "1.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+        buildConfigField("boolean", "FIREBASE_ENABLED", firebaseEnabled.toString())
     }
 
     buildTypes {
@@ -117,9 +123,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
 
-    // Optional Firebase — uncomment with google-services plugin:
-    // implementation(platform(libs.firebase.bom))
-    // implementation(libs.firebase.firestore)
+    // Firebase (Firestore). Solo se usa si BuildConfig.FIREBASE_ENABLED es true.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.firestore)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
